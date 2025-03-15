@@ -30,6 +30,59 @@ class ProjectPromptGenerator:
             r"\.pdf$", r"\.zip$", r"\.tar$", r"\.gz$"
         ]
         
+        # Add patterns from .gitignore if it exists
+        self.add_gitignore_patterns()
+        
+    def add_gitignore_patterns(self):
+        """Read patterns from .gitignore and add them to ignored_patterns"""
+        gitignore_path = os.path.join(self.root_dir, ".gitignore")
+        if os.path.exists(gitignore_path):
+            print("  📄 Reading .gitignore file...")
+            gitignore_count = 0
+            
+            with open(gitignore_path, 'r', encoding='utf-8', errors='ignore') as f:
+                for line in f:
+                    # Skip empty lines and comments
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    
+                    # Convert gitignore pattern to regex pattern
+                    # Handle basic pattern types
+                    pattern = line
+                    
+                    # Remove leading slash if present (indicates project root)
+                    if pattern.startswith('/'):
+                        pattern = pattern[1:]
+                    
+                    # Handle directory indicator (trailing slash)
+                    is_dir = pattern.endswith('/')
+                    if is_dir:
+                        pattern = pattern[:-1]
+                    
+                    # Escape special regex characters
+                    pattern = re.escape(pattern)
+                    
+                    # Convert gitignore glob patterns to regex
+                    # Replace * with .* (any characters)
+                    pattern = pattern.replace('\\*', '.*')
+                    
+                    # Replace ? with . (any single character)
+                    pattern = pattern.replace('\\?', '.')
+                    
+                    # Handle directory specific pattern
+                    if is_dir:
+                        self.ignored_patterns.append(f"^{pattern}$|^{pattern}/|/{pattern}/")
+                    else:
+                        # For files, match either the exact name or path ending with this name
+                        self.ignored_patterns.append(f"^{pattern}$|/{pattern}$")
+                    
+                    gitignore_count += 1
+            
+            print(f"  ✓ Added {gitignore_count} patterns from .gitignore")
+        else:
+            print("  ⚠️ No .gitignore file found")
+        
     def run(self):
         print("🔍 Starting Project Prompt Generator")
         print("Step 1: Checking for README.md...")
