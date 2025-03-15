@@ -2,34 +2,63 @@ import os
 import re
 import json
 import requests
+import logging
 from pathlib import Path
 import subprocess
 import time
+from datetime import datetime
 from dotenv import load_dotenv
+
+# Set up logging
+LOG_FILE = "project_prompt_generator.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding='utf-8'),
+        logging.StreamHandler()  # Also log to console
+    ]
+)
+logger = logging.getLogger("ProjectPromptGenerator")
 
 # Add token calculation imports 
 try:
     from vertexai.preview import tokenization
     TOKENIZER_AVAILABLE = True
+    logger.info("Tokenizer available: using vertexai package for accurate token counting")
 except ImportError:
     TOKENIZER_AVAILABLE = False
-    print("  ⚠️ vertexai package not available. Token calculation will be estimated.")
+    logger.warning("vertexai package not available. Token calculation will be estimated.")
 
 # Maximum tokens for Gemini 1.5 Pro
 MAX_TOKENS = 1800000
+logger.info(f"Maximum token limit set to {MAX_TOKENS:,}")
 
 class ProjectPromptGenerator:
     def __init__(self, api_key=None):
+        logger.info("Initializing ProjectPromptGenerator")
         # Load API key from .env file if not provided
         if api_key is None:
             load_dotenv()
             self.api_key = os.getenv("GEMINI_API_KEY")
             if not self.api_key:
+                logger.error("GEMINI_API_KEY not found in .env file")
                 raise ValueError("GEMINI_API_KEY not found in .env file")
+            else:
+                logger.info("API key loaded from .env file")
         else:
             self.api_key = api_key
+            logger.info("Using provided API key")
+        
+        # Check for debug flag in environment
+        self.debug_ai_calls = os.getenv("DEBUG_AI_CALLS", "false").lower() == "true"
+        if self.debug_ai_calls:
+            logger.info("DEBUG_AI_CALLS is enabled - detailed logging of AI requests and responses will be shown")
+        else:
+            logger.info("DEBUG_AI_CALLS is disabled - set DEBUG_AI_CALLS=true in .env to see detailed AI communication")
             
         self.root_dir = os.getcwd()
+        logger.info(f"Working directory: {self.root_dir}")
         self.file_tree = []
         self.important_files = []
         self.ai_selected_files = []
@@ -43,12 +72,15 @@ class ProjectPromptGenerator:
             r"\.woff$", r"\.woff2$", r"\.ttf$", r"\.eot$", r"\.mp3$", r"\.mp4$",
             r"\.pdf$", r"\.zip$", r"\.tar$", r"\.gz$"
         ]
+        logger.info(f"Initialized with {len(self.ignored_patterns)} default ignore patterns")
         
         # Initialize tokenizer if available
         if TOKENIZER_AVAILABLE:
             self.tokenizer = tokenization.get_tokenizer_for_model("gemini-1.5-pro")
+            logger.info("Tokenizer initialized for model: gemini-1.5-pro")
         else:
             self.tokenizer = None
+            logger.info("Using estimated token counting")
         
         # Add patterns from .gitignore if it exists
         self.add_gitignore_patterns()
@@ -57,7 +89,7 @@ class ProjectPromptGenerator:
         """Read patterns from .gitignore and add them to ignored_patterns"""
         gitignore_path = os.path.join(self.root_dir, ".gitignore")
         if os.path.exists(gitignore_path):
-            print("  📄 Reading .gitignore file...")
+            logger.info("Reading .gitignore file")
             gitignore_count = 0
             
             with open(gitignore_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -99,9 +131,9 @@ class ProjectPromptGenerator:
                     
                     gitignore_count += 1
             
-            print(f"  ✓ Added {gitignore_count} patterns from .gitignore")
+            logger.info(f"Added {gitignore_count} patterns from .gitignore")
         else:
-            print("  ⚠️ No .gitignore file found")
+            logger.warning("No .gitignore file found")
         
     def generate_file_tree_string(self):
         """Generate a string representation of the file tree"""
@@ -158,7 +190,7 @@ class ProjectPromptGenerator:
     
     def ask_ai_for_important_files(self):
         """Ask the AI which files are important to examine more closely"""
-        print("  🤖 Asking AI to identify important files to examine...")
+        logger.info("Asking AI to identify important files")
         
         # Create a prompt with README content and file tree
         file_tree_str = self.generate_file_tree_string()
@@ -187,12 +219,15 @@ config.json
 lib/core.py
         """
         
+        logger.debug(f"AI prompt for file selection: {prompt[:100]}...")
+        
         try:
             response = self.call_gemini_api(prompt)
             file_list = response.strip().split('\n')
             
             # Clean up file paths from response
             file_list = [f.strip() for f in file_list if f.strip()]
+            logger.info(f"AI suggested {len(file_list)} files")
             
             # Filter to only include files that actually exist in our file tree
             valid_files = []
@@ -201,23 +236,27 @@ lib/core.py
                 normalized_file = file.replace('/', os.sep).replace('\\', os.sep)
                 if normalized_file in self.file_tree:
                     valid_files.append(normalized_file)
+                    logger.info(f"AI selected file (direct match): {normalized_file}")
                 else:
                     # Try to find the closest match
+                    found = False
                     for existing_file in self.file_tree:
                         if normalized_file in existing_file or existing_file.endswith(normalized_file):
                             valid_files.append(existing_file)
+                            logger.info(f"AI selected file (partial match): {existing_file} for {normalized_file}")
+                            found = True
                             break
+                    if not found:
+                        logger.warning(f"AI suggested file not found in project: {normalized_file}")
             
             self.ai_selected_files = valid_files
-            print(f"  ✓ AI identified {len(self.ai_selected_files)} important files")
-            for file in self.ai_selected_files:
-                print(f"    - {file}")
+            logger.info(f"AI identified {len(self.ai_selected_files)} valid important files")
                 
             return valid_files
         except Exception as e:
-            print(f"  ✗ Error asking AI for important files: {str(e)}")
+            logger.error(f"Error asking AI for important files: {str(e)}")
             # Fallback: identify important files automatically
-            print("  ⚠️ Falling back to automatic important file detection")
+            logger.warning("Falling back to automatic important file detection")
             self.identify_important_files_fallback()
             return self.important_files
     
@@ -226,21 +265,26 @@ lib/core.py
         if self.tokenizer is not None:
             try:
                 result = self.tokenizer.count_tokens(text)
+                logger.debug(f"Token calculation: {result.total_tokens:,} tokens for text length {len(text):,}")
                 return result.total_tokens
             except Exception as e:
-                print(f"  ⚠️ Error calculating tokens: {str(e)}")
+                logger.error(f"Error calculating tokens: {str(e)}")
                 # Fallback to estimation
-                return len(text) // 4  # Rough estimate: ~4 chars per token
+                estimated = len(text) // 4
+                logger.warning(f"Using estimated token count: {estimated:,}")
+                return estimated
         else:
             # If tokenizer not available, make a rough estimate
-            return len(text) // 4
+            estimated = len(text) // 4
+            logger.debug(f"Estimated token count: {estimated:,} for text length {len(text):,}")
+            return estimated
     
     def load_files_under_token_limit(self):
         """Load file contents while staying under token limit"""
-        print("  📊 Calculating token usage and loading files...")
+        logger.info("Calculating token usage and loading files")
         
         if not self.ai_selected_files:
-            print("  ⚠️ No AI-selected files available, using important files")
+            logger.warning("No AI-selected files available, using important files")
             files_to_load = self.important_files
         else:
             files_to_load = self.ai_selected_files
@@ -257,7 +301,7 @@ lib/core.py
             
         base_json = json.dumps(base_info, indent=2)
         total_tokens = self.calculate_tokens(base_json)
-        print(f"  ℹ️ Base project info: {total_tokens:,} tokens")
+        logger.info(f"Base project info: {total_tokens:,} tokens")
         
         # Add files until we approach the token limit
         file_contents = {}
@@ -268,51 +312,55 @@ lib/core.py
             if total_tokens + content_tokens <= MAX_TOKENS * 0.95:  # Leave 5% buffer
                 file_contents[file_path] = content
                 total_tokens += content_tokens
-                print(f"  ✓ Added {file_path}: {content_tokens:,} tokens (Total: {total_tokens:,})")
+                logger.info(f"Added {file_path}: {content_tokens:,} tokens (Total: {total_tokens:,})")
             else:
-                print(f"  ✗ Skipping {file_path}: Would exceed token limit")
+                logger.warning(f"Skipping {file_path}: Would exceed token limit ({total_tokens + content_tokens:,} > {MAX_TOKENS:,})")
                 break
                 
         self.file_contents = file_contents
-        print(f"  ✓ Loaded {len(file_contents)} files with {total_tokens:,} tokens (Limit: {MAX_TOKENS:,})")
+        logger.info(f"Loaded {len(file_contents)} files with {total_tokens:,} tokens (Limit: {MAX_TOKENS:,})")
         return file_contents
     
     def run(self):
-        print("🔍 Starting Project Prompt Generator")
-        print("Step 1: Checking for README.md...")
+        logger.info("Starting Project Prompt Generator")
+        start_time = time.time()
+        
+        logger.info("Step 1: Checking for README.md...")
         self.check_readme()
         
-        print("Step 2: Analyzing project structure...")
+        logger.info("Step 2: Analyzing project structure...")
         self.analyze_project_structure()
         
-        print("Step 3: Getting AI input on important files...")
+        logger.info("Step 3: Getting AI input on important files...")
         self.ask_ai_for_important_files()
         
-        print("Step 4: Loading file contents within token limits...")
+        logger.info("Step 4: Loading file contents within token limits...")
         self.load_files_under_token_limit()
         
-        print("Step 5: Generating PROJECT_PROMPT.md for AI assistants...")
+        logger.info("Step 5: Generating PROJECT_PROMPT.md for AI assistants...")
         self.generate_project_prompt()
         
-        print("✅ Complete! PROJECT_PROMPT.md has been created for AI assistants.")
+        end_time = time.time()
+        duration = end_time - start_time
+        logger.info(f"Complete! PROJECT_PROMPT.md has been created for AI assistants (Duration: {duration:.2f} seconds)")
         
     def check_readme(self):
         """Check if README.md exists"""
         readme_path = os.path.join(self.root_dir, "README.md")
         if os.path.exists(readme_path):
             self.readme_exists = True
-            print("  ✓ README.md found")
+            logger.info("README.md found")
             
             # Read README content for later use
             with open(readme_path, 'r', encoding='utf-8') as f:
                 self.readme_content = f.read()
-                print(f"  ℹ️ README.md contains {len(self.readme_content)} characters")
+                logger.info(f"README.md contains {len(self.readme_content):,} characters")
         else:
-            print("  ✗ README.md not found")
+            logger.warning("README.md not found")
     
     def analyze_project_structure(self):
         """Analyze the project structure and create a file tree"""
-        print("  📂 Scanning directory structure...")
+        logger.info("Scanning directory structure...")
         
         def should_ignore(path):
             return any(re.search(pattern, path) for pattern in self.ignored_patterns)
@@ -333,11 +381,11 @@ lib/core.py
                     if not should_ignore(file_path):
                         self.file_tree.append(file_path)
         
-        print(f"  ✓ Found {len(self.file_tree)} files")
+        logger.info(f"Found {len(self.file_tree)} files")
     
     def identify_important_files_fallback(self):
         """Identify important files in the project as a fallback if AI selection fails"""
-        print("  🔍 Identifying important files with fallback method...")
+        logger.info("Identifying important files with fallback method")
         
         # Patterns for important files
         important_patterns = [
@@ -364,9 +412,9 @@ lib/core.py
         for file_path in self.file_tree:
             if any(re.search(pattern, file_path) for pattern in important_patterns):
                 self.important_files.append(file_path)
-                print(f"  ✓ Important: {file_path}")
+                logger.info(f"Important: {file_path}")
         
-        print(f"  ✓ Identified {len(self.important_files)} important files")
+        logger.info(f"Identified {len(self.important_files)} important files")
     
     def read_file_content(self, file_path):
         """Read the entire content of a file"""
@@ -375,6 +423,7 @@ lib/core.py
             with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
                 return f.read()
         except Exception as e:
+            logger.error(f"Error reading file {file_path}: {str(e)}")
             return f"Error reading file: {str(e)}"
     
     def generate_project_prompt(self):
@@ -395,7 +444,7 @@ lib/core.py
         
         # Calculate tokens for verification
         data_tokens = self.calculate_tokens(data_str)
-        print(f"  ℹ️ Data being sent to Gemini: {data_tokens:,} tokens")
+        logger.info(f"Data being sent to Gemini: {data_tokens:,} tokens")
         
         prompt = f"""
 You are an expert developer who is analyzing a project to create a specialized document ONLY FOR AI ASSISTANTS (not for human developers).
@@ -422,7 +471,7 @@ The documentation should help AI tools understand the project context quickly an
         """
         
         # Call Gemini API
-        print("  🤖 Calling Gemini API to generate AI-focused documentation...")
+        logger.info("Calling Gemini API to generate AI-focused documentation")
         try:
             response = self.call_gemini_api(prompt)
             markdown_content = response.strip()
@@ -441,16 +490,17 @@ The documentation should help AI tools understand the project context quickly an
             with open(os.path.join(self.root_dir, "PROJECT_PROMPT.md"), 'w', encoding='utf-8') as f:
                 f.write(markdown_content)
             
-            print("  ✓ AI-focused PROJECT_PROMPT.md created successfully")
+            logger.info("AI-focused PROJECT_PROMPT.md created successfully")
             return markdown_content
         except Exception as e:
-            print(f"  ✗ Error generating AI documentation: {str(e)}")
+            logger.error(f"Error generating AI documentation: {str(e)}")
             
             # Create a basic version in case the API fails
             self.create_fallback_project_prompt()
     
     def call_gemini_api(self, prompt):
         """Call the Gemini API to generate documentation"""
+        logger.info("Calling Gemini API")
         url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
         headers = {
             "Content-Type": "application/json",
@@ -473,24 +523,111 @@ The documentation should help AI tools understand the project context quickly an
             "key": self.api_key
         }
         
-        response = requests.post(url, headers=headers, json=data, params=params)
+        logger.info(f"Making API request to Gemini (prompt length: {len(prompt):,} characters)")
+        start_time = time.time()
         
-        if response.status_code == 200:
-            result = response.json()
-            # Extract the text from the response
-            if "candidates" in result and len(result["candidates"]) > 0:
-                if "content" in result["candidates"][0] and "parts" in result["candidates"][0]["content"]:
-                    parts = result["candidates"][0]["content"]["parts"]
-                    if len(parts) > 0 and "text" in parts[0]:
-                        return parts[0]["text"]
+        # Log the full prompt if debug mode is enabled
+        if self.debug_ai_calls:
+            # Create a debug file for this specific request with a timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
+            os.makedirs(debug_dir, exist_ok=True)
             
-            raise Exception(f"Unexpected response format: {json.dumps(result)}")
-        else:
-            raise Exception(f"API Error: {response.status_code} - {response.text}")
+            # Write the prompt to a file
+            prompt_file = os.path.join(debug_dir, f"prompt_{timestamp}.txt")
+            with open(prompt_file, 'w', encoding='utf-8') as f:
+                f.write(prompt)
+            
+            logger.info(f"DEBUG: Full prompt saved to {prompt_file}")
+            print(f"\n[DEBUG] Full prompt saved to {prompt_file}")
+        
+        try:
+            response = requests.post(url, headers=headers, json=data, params=params)
+            end_time = time.time()
+            duration = end_time - start_time
+            
+            logger.info(f"Received API response (status: {response.status_code}, duration: {duration:.2f} seconds)")
+            
+            # Save the full response if debug mode is enabled
+            if self.debug_ai_calls and response.status_code == 200:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
+                
+                # Write the raw response to a file
+                response_file = os.path.join(debug_dir, f"response_{timestamp}.json")
+                with open(response_file, 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+                
+                logger.info(f"DEBUG: Full API response saved to {response_file}")
+                print(f"\n[DEBUG] Full API response saved to {response_file}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                # Extract the text from the response
+                if "candidates" in result and len(result["candidates"]) > 0:
+                    if "content" in result["candidates"][0] and "parts" in result["candidates"][0]["content"]:
+                        parts = result["candidates"][0]["content"]["parts"]
+                        if len(parts) > 0 and "text" in parts[0]:
+                            response_text = parts[0]["text"]
+                            logger.info(f"Extracted response text (length: {len(response_text):,} characters)")
+                            
+                            # Save the extracted text response if debug mode is enabled
+                            if self.debug_ai_calls:
+                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
+                                
+                                # Write the extracted text to a file
+                                text_file = os.path.join(debug_dir, f"extracted_text_{timestamp}.txt")
+                                with open(text_file, 'w', encoding='utf-8') as f:
+                                    f.write(response_text)
+                                
+                                logger.info(f"DEBUG: Extracted text saved to {text_file}")
+                                print(f"\n[DEBUG] Extracted text saved to {text_file}")
+                            
+                            return response_text
+                
+                error_msg = f"Unexpected response format: {json.dumps(result)[:100]}..."
+                logger.error(error_msg)
+                
+                # Log the full response on error if debug mode is enabled
+                if self.debug_ai_calls:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
+                    
+                    # Write the error response to a file
+                    error_file = os.path.join(debug_dir, f"error_response_{timestamp}.json")
+                    with open(error_file, 'w', encoding='utf-8') as f:
+                        f.write(json.dumps(result, indent=2))
+                    
+                    logger.error(f"DEBUG: Error response saved to {error_file}")
+                    print(f"\n[DEBUG] Error response saved to {error_file}")
+                
+                raise Exception(error_msg)
+            else:
+                error_msg = f"API Error: {response.status_code} - {response.text}"
+                logger.error(error_msg)
+                
+                # Log the error response if debug mode is enabled
+                if self.debug_ai_calls:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
+                    
+                    # Write the error response to a file
+                    error_file = os.path.join(debug_dir, f"http_error_{timestamp}.txt")
+                    with open(error_file, 'w', encoding='utf-8') as f:
+                        f.write(f"Status Code: {response.status_code}\n\n{response.text}")
+                    
+                    logger.error(f"DEBUG: HTTP error saved to {error_file}")
+                    print(f"\n[DEBUG] HTTP error saved to {error_file}")
+                
+                raise Exception(error_msg)
+        except Exception as e:
+            logger.error(f"Exception during API call: {str(e)}")
+            raise
     
     def create_fallback_project_prompt(self):
         """Create a basic PROJECT_PROMPT.md for AI assistants in case the API call fails"""
-        print("  ⚠️ Creating fallback AI-focused PROJECT_PROMPT.md...")
+        logger.warning("Creating fallback AI-focused PROJECT_PROMPT.md")
         
         project_name = os.path.basename(self.root_dir)
         file_count = len(self.file_tree)
@@ -543,13 +680,20 @@ This documentation was automatically generated to help AI assistants better unde
         with open(os.path.join(self.root_dir, "PROJECT_PROMPT.md"), 'w', encoding='utf-8') as f:
             f.write(content)
         
-        print("  ✓ Fallback AI-focused PROJECT_PROMPT.md created")
+        logger.info("Fallback AI-focused PROJECT_PROMPT.md created")
 
 
 if __name__ == "__main__":
     try:
+        logger.info("=== PROJECT PROMPT GENERATOR SESSION START ===")
+        logger.info(f"Session timestamp: {datetime.now().isoformat()}")
         generator = ProjectPromptGenerator()
         generator.run()
+        logger.info("=== PROJECT PROMPT GENERATOR SESSION END ===")
     except ValueError as e:
+        logger.error(f"Error: {e}")
         print(f"Error: {e}")
         print("Please create a .env file in the project root with GEMINI_API_KEY=your_api_key")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        print(f"An unexpected error occurred: {str(e)}")
