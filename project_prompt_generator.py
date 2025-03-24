@@ -200,7 +200,10 @@ class ProjectPromptGenerator:
         
         prompt = f"""
 You are an expert developer analyzing a project. I need you to identify which files are the most important to examine
-in order to understand this project's structure, purpose, and functionality.
+in order to understand this project's structure, purpose, and functionality, with special emphasis on the core business logic.
+
+The purpose of this analysis is to help AI coding assistants understand the project scope precisely to reduce hallucinations 
+and improve the efficiency of AI completions. Focus on files that reveal the core logical flows and business rules.
 
 Here is the project's README.md (if available):
 {self.readme_content if self.readme_exists else "No README.md found."}
@@ -210,16 +213,26 @@ Here is the project's file structure:
 
 Based on this information, list ONLY the filenames (with paths) of the most important files to examine.
 DO NOT include any explanation, commentary, or analysis.
-Just provide a list of the most important files, one per line, based on the following criteria:
-1. Configuration files that define the project setup
-2. Main entry point files
-3. Core functionality files
-4. Files that explain the project architecture
+Just provide a list of the most important files, one per line, prioritizing:
+
+1. Files containing core business logic and domain rules
+2. Files that define key workflows and processes
+3. Files with critical application logic (not just configuration or UI)
+4. Main entry point files that show how the application logic flows
+5. Files that define data models and their relationships
+
+Avoid focusing too much on:
+- Style files (CSS, SCSS)
+- Static assets 
+- Test files (unless they clearly demonstrate business logic)
+- Build configuration files
+- External libraries
 
 Example response format:
 src/main.py
-config.json
 lib/core.py
+models/user.py
+services/authentication.py
         """
         
         logger.debug(f"AI prompt for file selection: {prompt[:100]}...")
@@ -451,26 +464,33 @@ lib/core.py
         
         prompt = f"""
 You are an expert developer who is analyzing a project to create a specialized document ONLY FOR AI ASSISTANTS (not for human developers).
+Your task is to create an optimized PROJECT_PROMPT.md file that will prevent AI hallucinations and make AI tools focus precisely on the project scope.
+
 Based on the following project information, create a detailed PROJECT_PROMPT.md that:
-1. Describes the purpose, structure, and main features of the project in a way that helps AI assistants understand the codebase
-2. Outlines the technology stack and dependencies in a format optimized for AI reasoning
-3. Highlights the most important files and their purposes to improve AI's contextual understanding
-4. Provides information about file relationships and architecture to help AI assistants navigate the project
-5. Uses a structure and format specifically designed to reduce token usage and improve AI efficiency when working with the codebase
+1. Maps the core business logic and domain rules of the application in a highly structured format
+2. Creates clear logical flow diagrams showing how different components interact
+3. Identifies key decision points and business rules that govern application behavior
+4. Explains data models and their relationships in a way that minimizes AI confusion
+5. Prioritizes information that reveals the project's logical architecture over implementation details
+
+Remember, the primary goal is to help AI tools:
+- Understand precisely what the application does (preventing hallucination)
+- Identify the scope and boundaries of the system (preventing unnecessary solutions)
+- Focus on the right components when suggesting changes (increasing efficiency)
+- Make code changes that align with existing business logic (maintaining consistency)
 
 Here is the project information:
 {data_str}
 
-Important: The resulting document is EXCLUSIVELY for AI consumption, not for human developers (developers will use README.md instead).
-Focus on structuring information to optimize AI understanding, reasoning, and search capabilities.
+IMPORTANT GUIDELINES:
+1. Structure this document specifically for AI reasoning, not human reading
+2. Organize information hierarchically from high-level logic to implementation details
+3. Use precise, consistent terminology throughout the document
+4. Create clear boundaries around what's in-scope vs. out-of-scope
+5. Include a "Logic Map" section that visually represents key workflows using markdown formatting
 
-Format the documentation with proper Markdown, including:
-- Clear, AI-optimized sections
-- Code relationship diagrams where helpful for AI understanding
-- Important file paths formatted for easy AI parsing
-- A structured, hierarchical organization to minimize token usage during AI reasoning tasks
-
-The documentation should help AI tools understand the project context quickly and efficiently, saving tokens and improving response quality.
+The resulting document will serve as a reference for AI tools to understand the project scope precisely, 
+reducing token waste and improving the quality of AI completions by preventing hallucinations.
         """
         
         # Call Gemini API
@@ -484,7 +504,7 @@ The documentation should help AI tools understand the project context quickly an
 
 > **IMPORTANT**: This document is specifically designed for AI assistants to understand this codebase efficiently. 
 > It is not intended for human developers. Developers should refer to README.md and other project documentation.
-> The structure and content of this file are optimized to improve AI reasoning and reduce token usage.
+> This document focuses on the core logic flows and business rules to prevent hallucinations and improve AI response quality.
 
 """
             markdown_content = ai_header + markdown_content
