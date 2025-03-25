@@ -217,7 +217,14 @@ services/authentication.py
         logger.debug(f"AI prompt for file selection: {prompt[:100]}...")
         
         try:
-            response = self.api_client.call_gemini_api(prompt, self.tokenizer, operation_name="File Selection Analysis")
+            # Call the API with enhanced token accounting information
+            response = self.api_client.call_gemini_api(
+                prompt, 
+                self.tokenizer, 
+                operation_name="File Selection Analysis",
+                source_file="project_generator.py",
+                prompt_summary="Identify important project files"
+            )
             file_list = response.strip().split('\n')
             
             # Clean up file paths from response
@@ -279,6 +286,15 @@ services/authentication.py
         total_tokens = calculate_tokens(base_json, self.tokenizer)
         logger.info(f"Base project info: {total_tokens:,} tokens")
         
+        # Log base project info to token accounting
+        self.api_client.log_token_accounting(
+            input_tokens=total_tokens,
+            output_tokens=0,
+            prompt_summary="Base project information",
+            operation_name="Project Setup",
+            source_file=""
+        )
+        
         # Add files until we approach the token limit
         file_contents = {}
         for file_path in files_to_load:
@@ -289,6 +305,13 @@ services/authentication.py
                 file_contents[file_path] = content
                 total_tokens += content_tokens
                 logger.info(f"Added {file_path}: {content_tokens:,} tokens (Total: {total_tokens:,})")
+                
+                # Log each file to token accounting
+                self.api_client.log_token_accounting(
+                    input_tokens=content_tokens,
+                    output_tokens=0,
+                    source_file=file_path
+                )
             else:
                 logger.warning(f"Skipping {file_path}: Would exceed token limit ({total_tokens + content_tokens:,} > {MAX_TOKENS:,})")
                 break
@@ -315,6 +338,10 @@ services/authentication.py
         
         logger.info("Step 5: Generating PROJECT_PROMPT.md for AI assistants...")
         self.generate_project_prompt()
+        
+        # Add the grand total row to the token accounting
+        logger.info("Step 6: Finalizing token accounting with totals...")
+        self.api_client.finalize_token_accounting()
         
         end_time = time.time()
         duration = end_time - start_time
@@ -456,7 +483,13 @@ reducing token waste and improving the quality of AI completions by preventing h
         # Call Gemini API
         logger.info("Calling Gemini API to generate AI-focused documentation")
         try:
-            response = self.api_client.call_gemini_api(prompt, self.tokenizer, operation_name="Project Prompt Generation")
+            response = self.api_client.call_gemini_api(
+                prompt, 
+                self.tokenizer, 
+                operation_name="Project Prompt Generation",
+                source_file="project_generator.py",
+                prompt_summary="Generate PROJECT_PROMPT.md for AI assistants"
+            )
             markdown_content = response.strip()
             
             # Add a clear header explaining the purpose of this file
