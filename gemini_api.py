@@ -3,7 +3,7 @@ import json
 import requests
 import time
 from datetime import datetime
-from logger_config import logger, DEBUG_API_CALLS_DIR
+from logger_config import logger, DEBUG_API_CALLS_DIR, run_log_dir
 from token_utils import calculate_tokens, MAX_TOKENS
 
 class GeminiAPI:
@@ -15,8 +15,28 @@ class GeminiAPI:
         if self.debug_ai_calls:
             os.makedirs(DEBUG_API_CALLS_DIR, exist_ok=True)
             logger.info(f"Debug AI calls directory created at: {DEBUG_API_CALLS_DIR}")
+        
+        # Create a token accounting file
+        self.token_accounting_file = os.path.join(run_log_dir, "token_accounting.txt")
+        with open(self.token_accounting_file, 'w', encoding='utf-8') as f:
+            f.write("TOKEN ACCOUNTING SUMMARY\n")
+            f.write("=======================\n\n")
+            f.write("Date: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n\n")
+            f.write("OPERATION                        | INPUT TOKENS | OUTPUT TOKENS | TOTAL TOKENS\n")
+            f.write("----------------------------------|--------------|---------------|-------------\n")
+        logger.info(f"Token accounting file created at: {self.token_accounting_file}")
     
-    def call_gemini_api(self, prompt, tokenizer=None):
+    def log_token_accounting(self, operation, input_tokens, output_tokens):
+        """Log token usage to the accounting file"""
+        total_tokens = input_tokens + output_tokens
+        
+        with open(self.token_accounting_file, 'a', encoding='utf-8') as f:
+            f.write(f"{operation:<32} | {input_tokens:>12,d} | {output_tokens:>13,d} | {total_tokens:>13,d}\n")
+        
+        logger.info(f"Token accounting: {operation} - Input: {input_tokens:,}, Output: {output_tokens:,}, Total: {total_tokens:,}")
+        return total_tokens
+    
+    def call_gemini_api(self, prompt, tokenizer=None, operation_name="API Call"):
         """Call the Gemini API to generate documentation"""
         logger.info("Calling Gemini API")
         url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
@@ -131,7 +151,11 @@ class GeminiAPI:
                             parts = result["candidates"][0]["content"]["parts"]
                             if len(parts) > 0 and "text" in parts[0]:
                                 response_text = parts[0]["text"]
-                                logger.info(f"Extracted response text (length: {len(response_text):,} characters)")
+                                response_tokens = calculate_tokens(response_text, tokenizer)
+                                logger.info(f"Extracted response text (length: {len(response_text):,} characters, approximately {response_tokens:,} tokens)")
+                                
+                                # Log to token accounting
+                                self.log_token_accounting(operation_name, prompt_tokens, response_tokens)
                                 
                                 # Save the extracted text response if debug mode is enabled
                                 if self.debug_ai_calls:

@@ -217,7 +217,7 @@ services/authentication.py
         logger.debug(f"AI prompt for file selection: {prompt[:100]}...")
         
         try:
-            response = self.api_client.call_gemini_api(prompt, self.tokenizer)
+            response = self.api_client.call_gemini_api(prompt, self.tokenizer, operation_name="File Selection Analysis")
             file_list = response.strip().split('\n')
             
             # Clean up file paths from response
@@ -456,7 +456,7 @@ reducing token waste and improving the quality of AI completions by preventing h
         # Call Gemini API
         logger.info("Calling Gemini API to generate AI-focused documentation")
         try:
-            response = self.api_client.call_gemini_api(prompt, self.tokenizer)
+            response = self.api_client.call_gemini_api(prompt, self.tokenizer, operation_name="Project Prompt Generation")
             markdown_content = response.strip()
             
             # Add a clear header explaining the purpose of this file
