@@ -11,10 +11,9 @@
 > It is not intended for human developers. Developers should refer to README.md and other project documentation.
 > This document focuses on the core logic flows and business rules to prevent hallucinations and improve AI response quality.
 
-## Project Overview
+## Project Overview: ProjectPrompt
 
-**Name:** ProjectPrompt
-**Purpose:** This project automatically generates a PROJECT_PROMPT.md file designed to help AI assistants understand the structure and logic of a given codebase.  This improves the accuracy and efficiency of AI-assisted code modifications.
+This project aims to generate an optimized `PROJECT_PROMPT.md` file for AI assistants to understand the structure and logic of a given codebase. This generated file is intended to improve the accuracy and efficiency of AI-driven code modifications by minimizing hallucinations and focusing on relevant files and logic.
 
 ## Logic Map
 
@@ -22,60 +21,73 @@
 graph LR
     A[ProjectPromptGenerator.run()] --> B{README.md exists?};
     B -- Yes --> C[Read README.md];
-    B -- No --> D[Log warning];
-    C --> E[Analyze project structure];
-    D --> E;
-    E --> F[Ask AI for important files];
-    F --> G{AI Selection Successful?};
-    G -- Yes --> H[Load selected files];
-    G -- No --> I[Fallback file selection];
-    H --> J[Generate PROJECT_PROMPT.md];
-    I --> H;
-    J --> K[End];
+    B -- No --> D[Analyze project structure];
+    C --> D;
+    D --> E[Ask AI for important files];
+    E --> F{AI Success?};
+    F -- Yes --> G[Load selected files];
+    F -- No --> H[Fallback file selection];
+    G --> I[Generate PROJECT_PROMPT.md];
+    H --> G;
+    I --> J[End];
 ```
-
-## Data Model
-
-This project does not have a persistent data model. It operates on in-memory data derived from the target project's file system and content. Key data elements include:
-
-* **file_tree:** A list of file paths relative to the project root.
-* **file_contents:** A dictionary mapping file paths to their content.
-* **important_files:** A list of file paths deemed important by fallback logic, used if AI selection fails.
-* **ai_selected_files:**  A list of file paths suggested by the AI as important for understanding the project.
-* **readme_content:**  The content of README.md, if present.
 
 ## Core Business Logic and Domain Rules
 
-1. **File Selection:**  The core logic involves selecting the most relevant files for AI analysis.  This is done by:
-    * Asking an LLM (Gemini) to identify important files based on the file tree and README.md.
-    * If the LLM fails to provide a valid list, a fallback mechanism identifies important files using regular expressions matching common file names and locations.
-2. **File Content Loading:**  The content of the selected files is loaded into memory, respecting token limits to avoid exceeding the LLM's capacity.
-3. **Prompt Generation:** The loaded file content and project metadata are structured into a JSON object and passed to the LLM to generate the PROJECT_PROMPT.md.
-4. **Fallback Prompt Generation:** If the LLM fails to generate the PROJECT_PROMPT.md, a fallback mechanism creates a simplified version containing the file tree and a list of important files.
-5. **Ignoring Files:** Certain files and directories (e.g., .git, .vscode, node_modules, image files) are excluded from analysis to reduce noise and focus on the core logic. The `.gitignore` file is used to extend the list of ignored files and directories.
+1. **Project Analysis:** The core logic revolves around analyzing a project's directory structure, identifying key files (with AI assistance or fallback mechanisms), extracting their content, and summarizing the project's architecture and logic within the `PROJECT_PROMPT.md`.
 
+2. **File Selection:**  The application prioritizes files containing core business logic, workflows, data models, and main entry points.  It de-prioritizes style files, static assets, test files (unless demonstrating business logic), build configuration, and external libraries.
+
+3. **Token Management:**  The application carefully manages token usage to stay within the API limits.  It calculates token counts for files and prompts and selectively includes files in `PROJECT_PROMPT.md` based on available token budget.
+
+4. **AI Interaction:** The application interacts with a Large Language Model (LLM) via the Gemini API.  It constructs prompts to request the LLM to identify important files and generate the AI-focused documentation.
+
+5. **Fallback Mechanisms:**  If the AI-driven file selection or documentation generation fails, the application employs fallback methods to ensure a basic `PROJECT_PROMPT.md` is still generated.  This fallback relies on predefined file patterns and includes a simplified representation of the project.
+
+## Data Models and Relationships
+
+There are no explicit data models persisted in this project.  The primary data structures are in-memory representations of:
+
+- **File Tree:** A list of file paths relative to the project root.
+- **File Contents:** A dictionary mapping file paths to their string content.
+- **Project Information:** A dictionary containing metadata about the project (name, file count, etc.).
+
+These data structures are used to construct the prompt sent to the LLM and to generate the final `PROJECT_PROMPT.md` file.
 
 ## Key Decision Points and Business Rules
 
-* **AI Selection vs. Fallback:** If the AI fails to provide a valid list of files, the system falls back to a rule-based selection method.
-* **Token Limit:** File loading respects a predefined token limit to ensure the generated prompt does not exceed the LLM's capacity.
-* **File Ignoring:** Files matching predefined patterns are consistently ignored.
+- **AI File Selection Success:** If the LLM successfully identifies important files, these files are prioritized for inclusion in `PROJECT_PROMPT.md`. Otherwise, the fallback file selection logic is triggered.
+- **Token Limit:** The application continuously monitors token usage.  If including a file would exceed the predefined token limit, the file is skipped.
+- **Gemini API Availability:** The application relies on the Gemini API. If the API call fails (e.g., due to network issues or rate limiting), the application resorts to generating a fallback `PROJECT_PROMPT.md`.
 
-## Component Interaction
+## Scope and Boundaries
 
-1. **`project_prompt_generator.py`**: The main entry point orchestrates the process.
-2. **`project_generator.py`**: Contains the core logic for file selection, content loading, and prompt generation.
-3. **`gemini_api.py`**: Handles interaction with the Gemini API, including request formatting, error handling, and retries.
-4. **`token_utils.py`**: Provides utility functions for token calculation and tokenizer retrieval.
+**In-scope:**
+- Analyzing project file structure.
+- Identifying important files.
+- Generating AI-focused documentation (`PROJECT_PROMPT.md`).
+- Managing token usage within API limits.
+- Providing fallback mechanisms for core functionalities.
 
-## Out of Scope
+**Out-of-scope:**
+- Code execution or analysis beyond file identification.
+- Project-specific logic interpretation beyond identifying key files and workflows.
+- Implementing AI-driven code changes.
+- Supporting other LLMs besides Gemini.
 
-This project does not include:
 
-* Code analysis beyond file selection.
-* Modification of the target codebase.
-* Generation of documentation for human consumption.
-* Support for all programming languages or project structures.
+## Implementation Details (For AI Reference Only)
 
-This document is designed to minimize AI hallucinations by providing a clear, concise, and structured representation of the project's core logic.  It prioritizes logical architecture over implementation details, guiding AI assistants towards relevant information and preventing them from generating solutions outside the project's scope.
+The code is written in Python and uses the following key libraries:
+
+- `os`, `sys`, `pathlib`: File system operations.
+- `re`: Regular expressions for file pattern matching.
+- `json`: JSON serialization and deserialization.
+- `requests`: HTTP requests for Gemini API interaction.
+- `vertexai`: (If available) Tokenization for accurate token counting.
+- `logging`: Logging for debugging and status updates.
+- `dotenv`: Environment variable loading.
+
+
+This detailed `PROJECT_PROMPT.md` is designed to guide AI assistants, enabling them to work more efficiently with the ProjectPrompt codebase by focusing on the core logic and avoiding hallucinations.
 ```

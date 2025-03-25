@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 
-from logger_config import logger
+from logger_config import logger, run_log_dir
 from token_utils import calculate_tokens, get_tokenizer, MAX_TOKENS
 from gemini_api import GeminiAPI
 
@@ -470,10 +470,18 @@ reducing token waste and improving the quality of AI completions by preventing h
             markdown_content = ai_header + markdown_content
             
             # Write to PROJECT_PROMPT.md
-            with open(os.path.join(self.root_dir, "PROJECT_PROMPT.md"), 'w', encoding='utf-8') as f:
+            # Create a copy in the regular project directory
+            project_root_file = os.path.join(self.root_dir, "PROJECT_PROMPT.md")
+            with open(project_root_file, 'w', encoding='utf-8') as f:
+                f.write(markdown_content)
+                
+            # Also save a copy in the current log directory
+            log_file = os.path.join(run_log_dir, "PROJECT_PROMPT.md")
+            with open(log_file, 'w', encoding='utf-8') as f:
                 f.write(markdown_content)
             
-            logger.info("AI-focused PROJECT_PROMPT.md created successfully")
+            logger.info(f"AI-focused PROJECT_PROMPT.md created successfully at {project_root_file}")
+            logger.info(f"Copy saved to log directory at {log_file}")
             return markdown_content
         except Exception as e:
             logger.error(f"Error generating AI documentation: {str(e)}")
@@ -533,7 +541,16 @@ When working with this codebase:
 This documentation was automatically generated to help AI assistants better understand the project context quickly and efficiently while saving tokens.
 """
         
-        with open(os.path.join(self.root_dir, "PROJECT_PROMPT.md"), 'w', encoding='utf-8') as f:
+        # Write to PROJECT_PROMPT.md
+        # Create a copy in the regular project directory
+        project_root_file = os.path.join(self.root_dir, "PROJECT_PROMPT.md")
+        with open(project_root_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+            
+        # Also save a copy in the current log directory
+        log_file = os.path.join(run_log_dir, "PROJECT_PROMPT.md")
+        with open(log_file, 'w', encoding='utf-8') as f:
             f.write(content)
         
-        logger.info("Fallback AI-focused PROJECT_PROMPT.md created")
+        logger.info(f"Fallback AI-focused PROJECT_PROMPT.md created at {project_root_file}")
+        logger.info(f"Copy saved to log directory at {log_file}")

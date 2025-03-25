@@ -1,6 +1,7 @@
 #custom
 test/
 debug_ai_calls/
+log/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

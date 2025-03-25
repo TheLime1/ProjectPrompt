@@ -3,7 +3,7 @@ import json
 import requests
 import time
 from datetime import datetime
-from logger_config import logger
+from logger_config import logger, DEBUG_API_CALLS_DIR
 from token_utils import calculate_tokens, MAX_TOKENS
 
 class GeminiAPI:
@@ -11,6 +11,10 @@ class GeminiAPI:
         self.api_key = api_key
         self.debug_ai_calls = debug_ai_calls
         self.root_dir = os.getcwd()
+        # Create debug directory if needed
+        if self.debug_ai_calls:
+            os.makedirs(DEBUG_API_CALLS_DIR, exist_ok=True)
+            logger.info(f"Debug AI calls directory created at: {DEBUG_API_CALLS_DIR}")
     
     def call_gemini_api(self, prompt, tokenizer=None):
         """Call the Gemini API to generate documentation"""
@@ -51,11 +55,9 @@ class GeminiAPI:
         if self.debug_ai_calls:
             # Create a debug file for this specific request with a timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
-            os.makedirs(debug_dir, exist_ok=True)
             
             # Write the prompt to a file
-            prompt_file = os.path.join(debug_dir, f"prompt_{timestamp}.txt")
+            prompt_file = os.path.join(DEBUG_API_CALLS_DIR, f"prompt_{timestamp}.txt")
             with open(prompt_file, 'w', encoding='utf-8') as f:
                 f.write(prompt)
             
@@ -82,10 +84,9 @@ class GeminiAPI:
                     # Log the error response if debug mode is enabled
                     if self.debug_ai_calls:
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
                         
                         # Write the error response to a file
-                        error_file = os.path.join(debug_dir, f"http_error_{timestamp}.txt")
+                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"http_error_{timestamp}.txt")
                         with open(error_file, 'w', encoding='utf-8') as f:
                             f.write(f"Status Code: {response.status_code}\n\n{response.text}")
                         
@@ -113,10 +114,9 @@ class GeminiAPI:
                 # Save the full response if debug mode is enabled
                 if self.debug_ai_calls and response.status_code == 200:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
                     
                     # Write the raw response to a file
-                    response_file = os.path.join(debug_dir, f"response_{timestamp}.json")
+                    response_file = os.path.join(DEBUG_API_CALLS_DIR, f"response_{timestamp}.json")
                     with open(response_file, 'w', encoding='utf-8') as f:
                         f.write(response.text)
                     
@@ -136,10 +136,9 @@ class GeminiAPI:
                                 # Save the extracted text response if debug mode is enabled
                                 if self.debug_ai_calls:
                                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
                                     
                                     # Write the extracted text to a file
-                                    text_file = os.path.join(debug_dir, f"extracted_text_{timestamp}.txt")
+                                    text_file = os.path.join(DEBUG_API_CALLS_DIR, f"extracted_text_{timestamp}.txt")
                                     with open(text_file, 'w', encoding='utf-8') as f:
                                         f.write(response_text)
                                     
@@ -154,10 +153,9 @@ class GeminiAPI:
                     # Log the full response on error if debug mode is enabled
                     if self.debug_ai_calls:
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
                         
                         # Write the error response to a file
-                        error_file = os.path.join(debug_dir, f"error_response_{timestamp}.json")
+                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"error_response_{timestamp}.json")
                         with open(error_file, 'w', encoding='utf-8') as f:
                             f.write(json.dumps(result, indent=2))
                         
@@ -172,10 +170,9 @@ class GeminiAPI:
                     # Log the error response if debug mode is enabled
                     if self.debug_ai_calls:
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        debug_dir = os.path.join(self.root_dir, "debug_ai_calls")
                         
                         # Write the error response to a file
-                        error_file = os.path.join(debug_dir, f"http_error_{timestamp}.txt")
+                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"http_error_{timestamp}.txt")
                         with open(error_file, 'w', encoding='utf-8') as f:
                             f.write(f"Status Code: {response.status_code}\n\n{response.text}")
                         
