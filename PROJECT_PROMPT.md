@@ -13,7 +13,7 @@
 
 ## Project Overview: ProjectPrompt
 
-This project aims to generate optimized prompts for AI assistants to understand codebases, thereby reducing hallucinations and enhancing AI-driven code modifications.  It analyzes the project's file structure, identifies key files based on predefined criteria and AI assistance, extracts their contents, and constructs a structured PROJECT_PROMPT.md file.
+This project aims to generate optimized prompts for AI assistants to analyze codebases effectively.  It focuses on extracting core business logic and architectural information to minimize AI hallucinations and improve the quality of AI-driven code modifications.  This system prioritizes logical understanding over specific implementation details.  The application interacts with the Google Gemini API.
 
 ## Logic Map
 
@@ -24,56 +24,76 @@ graph LR
     B -- No --> D[Skip README.md];
     C --> E[Analyze Project Structure];
     D --> E;
-    E --> F[AI File Selection];
-    F --> G[Load File Contents (Token Limit)];
-    G --> H[Generate PROJECT_PROMPT.md];
-    H --> I[Finalize Token Accounting];
+    E --> F[Ask AI for Important Files];
+    F --> G{AI Success?};
+    G -- Yes --> H[Load AI Selected Files];
+    G -- No --> I[Fallback: Identify Important Files];
+    H --> J[Load Files (Token Limit)];
+    I --> J;
+    J --> K[Generate PROJECT_PROMPT.md];
+    K --> L[Finalize Token Accounting];
 ```
 
 ## Core Business Logic and Domain Rules
 
-1. **File Selection:** Prioritizes files containing core business logic, workflows, application logic, entry points, and data models.  Avoids style files, assets, tests (unless demonstrating business logic), configurations, and external libraries.  Uses AI for intelligent selection and a fallback mechanism based on filename patterns if AI selection fails.
+1. **File Selection:** The system prioritizes files containing core business logic, workflows, application logic, entry points, and data models. It avoids style files, static assets, tests (unless demonstrating business logic), configuration files, and external libraries.
+2. **Token Limit:** The system adheres to a strict token limit (`MAX_TOKENS = 1,800,000`) when loading file contents to send to the Gemini API.  A 5% buffer is maintained below this limit.
+3. **Gemini API Interaction:** The `GeminiAPI` class handles communication with the Gemini API, including authentication, request formatting, response parsing, and token usage tracking.  Retry logic is implemented to handle rate limiting (429 errors).
+4. **Fallback Mechanisms:** If the Gemini API call for file selection fails, a fallback mechanism identifies important files based on predefined patterns. A fallback `PROJECT_PROMPT.md` generation is also implemented if the main Gemini API call for documentation generation fails.
+5. **Token Accounting:**  Detailed token usage is logged for each API call and file loaded, including input and output token counts.  This facilitates monitoring and optimization of token consumption.
+6. **Error Handling:**  The system includes error handling for API requests, file reading, and other potential issues.  Error messages are logged for debugging purposes.
+7. **Ignoring Files:**  Files and directories matching specific patterns (defined in `ignored_patterns` and from `.gitignore`) are excluded from the analysis.
 
-2. **Token Limit:** Adheres to a strict token limit (1,800,000) when loading file contents to prevent exceeding API limits.  Prioritizes loading the most important files.
 
-3. **Prompt Generation:** Constructs a PROJECT_PROMPT.md containing structured information about the project including the file tree, important file contents, and logical architecture. This prompt is optimized for AI understanding, not human readability.
+## Data Models
 
-4. **Token Accounting:** Logs all API interactions and file loads, calculating token usage for each operation to maintain transparency and aid in efficient resource utilization.
+This project doesn't have explicit data models in the traditional sense.  The primary data structure used is a dictionary representing project information:
 
+```
+{
+    "name": "Project Name",
+    "file_count": <integer>,
+    "file_tree": <string>,
+    "file_contents": {
+        "file_path_1": "file_content_1",
+        "file_path_2": "file_content_2",
+        ...
+    },
+    "readme_content": <string> (optional)
+}
+```
 
-## Data Model
+## Key Decision Points
 
-The core data managed within this project is represented by a dictionary stored in the `project_data` variable within `project_generator.py`. This dictionary contains the following key-value pairs:
-
-* `"name"`: The project's name (string).
-* `"file_count"`:  Total number of files in the project (integer).
-* `"file_tree"`: String representation of the project's file tree.
-* `"file_contents"`: Dictionary where keys are file paths (string) and values are the file contents (string).
-* `"readme_content"`: Content of README.md (string, optional - only if present).
-
-## Key Decision Points and Business Rules
-
-* **AI File Selection Success:** If the AI successfully identifies important files, those are prioritized.  Otherwise, a fallback method using regular expressions selects important files based on file name patterns.
-* **Token Limit Exceeded:** If including a file's content exceeds the token limit, the file is skipped, and a warning is logged.
-* **API Call Failure:** If the Gemini API call fails during PROJECT_PROMPT.md generation, a fallback mechanism creates a simplified PROJECT_PROMPT.md file.
-
-## Component Interaction
-
-* `project_prompt_generator.py`: Main entry point. Instantiates and runs the `ProjectPromptGenerator`.
-* `project_generator.py`: Contains the core logic for analyzing project structure, interacting with the Gemini API, and generating PROJECT_PROMPT.md.
-* `gemini_api.py`: Handles communication with the Google Gemini API, including token accounting and error handling.
-* `token_utils.py`: Provides utility functions for calculating tokens and obtaining the tokenizer.
+* **AI File Selection:** The AI is queried to identify important files.  This is a critical decision point that affects which files are included in the `PROJECT_PROMPT.md`.
+* **Token Limit Handling:** The system must decide which files to include based on the token limit. This involves calculating token usage for each file and prioritizing files based on their perceived importance.
+* **Fallback Logic:**  The system relies on fallback logic for important file selection and `PROJECT_PROMPT.md` generation if the Gemini API calls fail.  These decision points determine the system's robustness in the face of API issues.
 
 ## Scope and Boundaries
 
-**In-scope:**  Analyzing project structure, identifying important files, generating an AI-optimized PROJECT_PROMPT.md, and managing token usage.
+**In-scope:**
 
-**Out-of-scope:** Implementing code modifications suggested by AI, providing human-readable documentation, analyzing code semantics beyond file selection, supporting other AI models besides Gemini.
+* Analyzing project structure and identifying important files.
+* Generating an AI-focused `PROJECT_PROMPT.md` document.
+* Interacting with the Google Gemini API.
+* Implementing fallback mechanisms for API and file handling failures.
+
+**Out-of-scope:**
+
+* Building or deploying the project.
+* Running tests or performing code analysis beyond file selection.
+* Implementing any specific functionality within the analyzed projects (this tool is for analysis only).
+* Supporting any LLM other than Google Gemini.
 
 
-## Implementation Details (For AI Reference Only)
+## Implementation Details (For AI, Reduced Priority)
 
-The code uses Python 3 and relies on several libraries, including `os`, `re`, `json`, `time`, `pathlib`, `datetime`, `dotenv`, `requests`, and potentially `vertexai`.  It employs regular expressions for file filtering, JSON for data serialization, and the Gemini API for prompt generation.
+The project is implemented in Python and uses several key libraries:
 
-The code maintains detailed logging for debugging and token accounting. It has error handling for API issues and fallback mechanisms for AI file selection and prompt generation failures.
+* `vertexai`: For tokenization and interaction with the Gemini API (if available).
+* `requests`: For making HTTP requests to the Gemini API.
+* Other standard libraries: `os`, `sys`, `json`, `time`, `logging`, `pathlib`, `datetime`, `dotenv`, `re`.
+
+
+This simplified and structured PROJECT_PROMPT.md is designed to be highly parsable by AI, allowing efficient access to critical information without requiring extensive text processing. This minimized approach aims to improve the effectiveness of AI assistance within the specified scope and constraints. 
 ```

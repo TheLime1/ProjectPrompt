@@ -30,6 +30,9 @@ class GeminiAPI:
         self.prompt_counter = 1
         self.total_input_tokens = 0
         self.total_output_tokens = 0
+        
+        # Initialize sequential counter for file naming
+        self.sequence_counter = 1
     
     def log_token_accounting(self, input_tokens, output_tokens, prompt_summary="", operation_name="", source_file=""):
         """Log token usage to the accounting file with focus on files and prompts"""
@@ -126,12 +129,14 @@ class GeminiAPI:
         
         # Log the full prompt if debug mode is enabled
         if self.debug_ai_calls:
-            # Create a debug file for this specific request with a timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Write the prompt to a file
-            prompt_file = os.path.join(DEBUG_API_CALLS_DIR, f"prompt_{timestamp}.txt")
+            # Write the prompt to a file with sequential numbering
+            prompt_file = os.path.join(DEBUG_API_CALLS_DIR, f"{self.sequence_counter:02d}-prompt.txt")
             with open(prompt_file, 'w', encoding='utf-8') as f:
+                f.write(f"Operation: {operation_name}\n")
+                f.write(f"Source file: {source_file}\n")
+                f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Tokens: {prompt_tokens:,}\n")
+                f.write("\n--- PROMPT CONTENT ---\n\n")
                 f.write(prompt)
             
             logger.info(f"DEBUG: Full prompt saved to {prompt_file}")
@@ -156,10 +161,8 @@ class GeminiAPI:
                     
                     # Log the error response if debug mode is enabled
                     if self.debug_ai_calls:
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        
-                        # Write the error response to a file
-                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"http_error_{timestamp}.txt")
+                        # Write the error response to a file with sequential numbering
+                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"{self.sequence_counter:02d}-error.txt")
                         with open(error_file, 'w', encoding='utf-8') as f:
                             f.write(f"Status Code: {response.status_code}\n\n{response.text}")
                         
@@ -182,14 +185,14 @@ class GeminiAPI:
                         continue
                     else:
                         # Token count too high, can't retry
+                        # Increment sequence counter even for failed attempts
+                        self.sequence_counter += 1
                         raise Exception(f"Token quota exceeded and prompt is too large ({prompt_tokens:,} > {MAX_TOKENS:,})")
                 
                 # Save the full response if debug mode is enabled
                 if self.debug_ai_calls and response.status_code == 200:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    
-                    # Write the raw response to a file
-                    response_file = os.path.join(DEBUG_API_CALLS_DIR, f"response_{timestamp}.json")
+                    # Write the raw response to a file with sequential numbering
+                    response_file = os.path.join(DEBUG_API_CALLS_DIR, f"{self.sequence_counter:02d}-response.json")
                     with open(response_file, 'w', encoding='utf-8') as f:
                         f.write(response.text)
                     
@@ -218,15 +221,20 @@ class GeminiAPI:
                                 
                                 # Save the extracted text response if debug mode is enabled
                                 if self.debug_ai_calls:
-                                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                    
-                                    # Write the extracted text to a file
-                                    text_file = os.path.join(DEBUG_API_CALLS_DIR, f"extracted_text_{timestamp}.txt")
+                                    # Write the extracted text to a file with sequential numbering
+                                    text_file = os.path.join(DEBUG_API_CALLS_DIR, f"{self.sequence_counter:02d}-extracted_text.txt")
                                     with open(text_file, 'w', encoding='utf-8') as f:
+                                        f.write(f"Operation: {operation_name}\n")
+                                        f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                                        f.write(f"Tokens: {response_tokens:,}\n")
+                                        f.write("\n--- RESPONSE CONTENT ---\n\n")
                                         f.write(response_text)
                                     
                                     logger.info(f"DEBUG: Extracted text saved to {text_file}")
                                     print(f"\n[DEBUG] Extracted text saved to {text_file}")
+                                
+                                # Increment sequence counter for the next interaction
+                                self.sequence_counter += 1
                                 
                                 return response_text
                     
@@ -235,16 +243,16 @@ class GeminiAPI:
                     
                     # Log the full response on error if debug mode is enabled
                     if self.debug_ai_calls:
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        
-                        # Write the error response to a file
-                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"error_response_{timestamp}.json")
+                        # Write the error response to a file with sequential numbering
+                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"{self.sequence_counter:02d}-error_response.json")
                         with open(error_file, 'w', encoding='utf-8') as f:
                             f.write(json.dumps(result, indent=2))
                         
                         logger.error(f"DEBUG: Error response saved to {error_file}")
                         print(f"\n[DEBUG] Error response saved to {error_file}")
                     
+                    # Increment sequence counter even for failed attempts
+                    self.sequence_counter += 1
                     raise Exception(error_msg)
                 else:
                     error_msg = f"API Error: {response.status_code} - {response.text}"
@@ -252,16 +260,16 @@ class GeminiAPI:
                     
                     # Log the error response if debug mode is enabled
                     if self.debug_ai_calls:
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        
-                        # Write the error response to a file
-                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"http_error_{timestamp}.txt")
+                        # Write the error response to a file with sequential numbering
+                        error_file = os.path.join(DEBUG_API_CALLS_DIR, f"{self.sequence_counter:02d}-http_error.txt")
                         with open(error_file, 'w', encoding='utf-8') as f:
                             f.write(f"Status Code: {response.status_code}\n\n{response.text}")
                         
                         logger.error(f"DEBUG: HTTP error saved to {error_file}")
                         print(f"\n[DEBUG] HTTP error saved to {error_file}")
                     
+                    # Increment sequence counter even for failed attempts
+                    self.sequence_counter += 1
                     raise Exception(error_msg)
             except Exception as e:
                 if retry_count < max_retries - 1 and "quota exceeded" in str(e).lower():
@@ -277,7 +285,11 @@ class GeminiAPI:
                         time.sleep(min(10, remaining))
                 else:
                     logger.error(f"Exception during API call: {str(e)}")
+                    # Increment sequence counter even for failed attempts
+                    self.sequence_counter += 1
                     raise
         
         # If we got here, all retries failed
+        # Increment sequence counter even for failed attempts
+        self.sequence_counter += 1
         raise Exception(f"Failed to call Gemini API after {max_retries} attempts")
