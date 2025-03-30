@@ -4,130 +4,146 @@
 > It contains precise variable names, routes, endpoints, and other technical details to prevent hallucinations.
 > Human developers should refer to standard documentation.
 
-# PROJECT_PROMPT - TECHNICAL REFERENCE FOR AI ASSISTANTS
-
-> **IMPORTANT**: This document is specifically designed as a technical reference for AI assistants.
-> It contains precise variable names, routes, endpoints, and other technical details to prevent hallucinations.
-> Human developers should refer to standard documentation.
+```markdown
+# PROJECT_PROMPT.json (AI Assistant Optimized)
 
 ## Project Overview
 
-**Name:** ProjectPrompt
-**Purpose:** Generate optimized prompts for AI coding assistants based on project code.
-**Main Functionality:** Analyzes project structure, identifies important files with AI assistance or fallback methods, extracts technical details, and generates a PROJECT_PROMPT.md/json file for AI tools.
+**Project Name:** ProjectPrompt
+**Description:** A tool to generate optimized prompts for AI assistants based on codebase analysis.
+**Purpose:** Improve AI understanding of project structure and functionality, minimizing hallucinations and maximizing token efficiency.
 
-## File Structure Map
+## System Architecture
 
+**Core Components:**
+
+* **project_prompt_generator.py:** Main entry point, orchestrates the prompt generation process.
+* **gemini_api.py:** Handles interactions with the Google Gemini API, including token management and request retries.
+* **vector_db.py:** Manages the vector database for semantic file selection (ChromaDB).
+* **token_utils.py:** Provides token calculation functions using `vertexai` or estimations.
+* **project_generator.py:** (Not provided in source code, assumed core component). Likely handles file selection logic and prompt construction.
+
+**Data Flow:**
+
+1. `project_prompt_generator.py` initiates the process.
+2. File selection occurs based on `FILE_SELECTION_MODE` (.env): `vector`, `ai`, or `auto`.
+    * `vector`: Utilizes `vector_db.py` and semantic search.
+    * `ai`: Calls Gemini API for analysis.
+    * `auto`: Uses heuristics.
+3. Selected files are passed to the prompt generator (`project_generator.py`).
+4. `project_generator.py` constructs the prompt.
+5. `gemini_api.py` sends the prompt to the Gemini API and receives the response.
+6. `token_utils.py` manages token counting throughout.
+
+## Technical Reference
+
+### Environment Variables (.env)
+
+| Variable Name           | Description                                                                                      | Default Value     |
+|-------------------------|--------------------------------------------------------------------------------------------------|-----------------|
+| `GEMINI_API_KEY`        | API key for Google Gemini. **REQUIRED.**                                                        |                 |
+| `FILE_SELECTION_MODE` | File selection strategy: `vector`, `ai`, `auto`.                                               | `vector`         |
+| `INCLUDE_FILES`        | Comma-separated list of file paths to always include.                                            |                 |
+| `EXCLUDE_FILES`        | Comma-separated list of file paths to always exclude.                                            |                 |
+| `VECTOR_MODEL`         | Embedding model for vector-based selection (e.g., `all-MiniLM-L6-v2`).                           | `all-MiniLM-L6-v2` |
+| `MAX_VECTOR_FILES`     | Maximum number of files selected via vector search.                                             | `20`            |
+| `MIN_SIMILARITY`       | Minimum similarity threshold for vector search.                                               | `0.6`           |
+| `DEBUG_AI_CALLS`      | Set to `true` to save prompts and responses for debugging.                                      | `false`        |
+| `LOG_LEVEL`            | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`.                                          |                 |
+
+
+### Constants (token_utils.py)
+
+| Constant Name | Value      | Description                                        |
+|---------------|-------------|----------------------------------------------------|
+| `MAX_TOKENS`  | `1800000` | Maximum token limit for Gemini 1.5 Pro API calls. |
+
+
+### Functions (gemini_api.py)
+
+```python
+GeminiAPI.call_gemini_api(prompt, tokenizer=None, operation_name="API Call", source_file="", prompt_summary="") 
+# Returns: str (API response text)
+# Parameters:
+#   prompt (str): The prompt to send to the API.
+#   tokenizer: (Optional) Tokenizer object.
+#   operation_name (str): Name of the operation for logging.
+#   source_file (str): Path to the source file for logging.
+#   prompt_summary (str): Summary of the prompt for logging.
+
+GeminiAPI.log_token_accounting(input_tokens, output_tokens, prompt_summary="", operation_name="", source_file="")
+# Returns: int (total tokens)
+# Parameters:
+#  input_tokens (int)
+#  output_tokens (int)
+#  prompt_summary (str)
+#  operation_name (str)
+#  source_file (str)
+
+GeminiAPI.finalize_token_accounting()
+# Returns: None
+
+# ... other GeminiAPI functions ...
 ```
-Project File Structure:
-├── PROJECT_PROMPT.md
-├── README.md
-├── gemini_api.py
-├── project_generator.py
-├── project_prompt_generator.py
-├── token_utils.py
-└── test/
-    └── token_calc.py
 
+### Functions (token_utils.py)
+
+```python
+calculate_tokens(text, tokenizer=None)
+# Returns: int (estimated or calculated token count)
+# Parameters:
+#   text (str)
+#   tokenizer (Optional)
+
+
+get_tokenizer() 
+# Returns: tokenizer object or None
 ```
 
-## Technical Reference: Key Components
 
-### 1. Project Generator (`project_generator.py`)
+### Functions (vector_db.py)
 
-**Class:** `ProjectPromptGenerator`
-
-**Key Variables:**
-
-| Variable Name          | Type             | Description                                                            | Defined In                                          |
-|-----------------------|-----------------|--------------------------------------------------------------------|------------------------------------------------------|
-| `api_key`            | `str`           | Gemini API key.                                                        | `__init__`                                           |
-| `debug_ai_calls`    | `bool`          | Flag to enable detailed logging of AI interactions.                   | `__init__`                                           |
-| `root_dir`           | `str`           | Project root directory.                                                 | `__init__`                                           |
-| `file_tree`          | `list`          | List of file paths in the project.                                 | `analyze_project_structure`                         |
-| `important_files`    | `list`          | List of automatically identified important files (fallback).         | `identify_important_files_fallback`                  |
-| `ai_selected_files` | `list`          | List of files selected by the AI as important.                     | `ask_ai_for_important_files`                        |
-| `file_contents`      | `dict`          | Dictionary of file paths and their contents.                           | `load_files_under_token_limit`                      |
-| `readme_exists`      | `bool`          | Flag indicating if a README.md file exists.                         | `check_readme`                                      |
-| `readme_content`     | `str`           | Content of the README.md file.                                     | `check_readme`                                      |
-| `ignored_patterns`   | `list`          | List of regex patterns for files/directories to ignore.             | `__init__` and `add_gitignore_patterns`              |
-| `tokenizer`          | `Tokenizer`     | Tokenizer object for Gemini.                                         | `__init__`                                           |
-| `api_client`        | `GeminiAPI`     | Instance of the GeminiAPI client.                                  | `__init__`                                           |
+```python
+#... VectorDatabaseManager methods: add_files, query_similar_files, get_related_files.  Refer to source for parameters/returns.
+```
 
 
+### Classes
 
-**Key Methods:**
+* `GeminiAPI` (gemini_api.py)
+* `VectorDatabaseManager` (vector_db.py)
 
-| Method Name                          | Description                                                                            |
-|------------------------------------|------------------------------------------------------------------------------------|
-| `__init__(self, api_key=None)`      | Constructor: Initializes the generator, loads API key, sets up logging and ignores. |
-| `add_gitignore_patterns(self)`      | Reads and adds ignore patterns from .gitignore.                                       |
-| `generate_file_tree_string(self)` | Creates a string representation of the file tree.                                 |
-| `ask_ai_for_important_files(self)` | Queries the AI to identify important files.                                       |
-| `load_files_under_token_limit(self)` | Loads file contents, respecting the token limit.                                    |
-| `run(self)`                         | Main execution method for the generator.                                             |
-| `check_readme(self)`               | Checks for README.md and loads its content.                                           |
-| `analyze_project_structure(self)`  | Analyzes project structure and builds the file tree.                             |
-| `read_file_content(self, file_path)` | Reads and returns the content of a given file.                                      |
-| `generate_project_prompt(self)`    | Generates the PROJECT_PROMPT.md/json file.                                   |
-|`create_fallback_project_prompt(self)`| Creates a basic PROJECT_PROMPT.txt if API fails.                                   |
+### Dependencies
+
+* `google.generativeai` (Gemini API)
+* `vertexai` (Tokenization)
+* `sentence-transformers` (Embeddings - optional)
+* `chromadb` (Vector database - optional)
+* `requests` (HTTP requests)
 
 
+## File Relationships
 
-### 2. Gemini API Client (`gemini_api.py`)
+* `project_prompt_generator.py` uses `gemini_api.py`, `vector_db.py`, `project_generator.py` (assumed).
+* `gemini_api.py` uses `token_utils.py`.
+* `vector_db.py` can use `sentence-transformers`, `chromadb`, and `google.generativeai`.
 
-**Class:** `GeminiAPI`
+## Data Structures
 
-**Key Variables:**
-
-| Variable Name          | Type      | Description                                                                     |
-|-----------------------|-----------|------------------------------------------------------------------------------|
-| `api_key`            | `str`      | Gemini API key.                                                                |
-| `debug_ai_calls`    | `bool`     | Flag to enable saving full API requests and responses.                         |
-|`token_accounting_file`| `str`      | Path to the token usage log file.                                          |
-| `prompt_counter`      | `int`      | Counter for API prompts.                                                        |
-| `total_input_tokens` | `int`      | Total input tokens sent to the API.                                              |
-| `total_output_tokens`| `int`      | Total output tokens received from the API.                                      |
+* Vector database (ChromaDB) stores file embeddings and metadata.
+* `.env` file stores configuration parameters.
 
 
-**Key Methods:**
+## AI Assistant Instructions
 
-| Method Name                              | Description                                                                          |
-|----------------------------------------|--------------------------------------------------------------------------------------|
-| `__init__(self, api_key, debug_ai_calls=False)` | Constructor: Initializes API client, sets up debug logging, creates accounting file.|
-| `log_token_accounting(...)`            | Records token usage for API calls and file processing.                               |
-|`finalize_token_accounting(self)`        | Adds a grand total row for tokens to accounting file.                                |
-| `call_gemini_api(...)`                  | Makes a call to the Gemini API. Handles retries and rate limiting.             |
+This document provides a comprehensive technical overview of the ProjectPrompt project. When working with this codebase, please refer to this document for precise information about:
 
-### 3. Token Utilities (`token_utils.py`)
+* Variable names and constants
+* Function signatures and parameters
+* Class hierarchies and relationships
+* API endpoints and parameters
+* File paths and relationships
+* Configuration options
 
-**Constants:**
-
-| Constant Name    | Value       | Description                                                     |
-|-----------------|-------------|-----------------------------------------------------------------|
-| `MAX_TOKENS`   | 1,800,000  | Maximum token limit for Gemini requests.                         |
-|`TOKENIZER_AVAILABLE`| `bool`     | Indicates whether vertexai tokenizer is available.           |
-
-
-**Functions:**
-
-| Function Name                  | Description                                                     |
-|-------------------------------|-----------------------------------------------------------------|
-| `calculate_tokens(text, tokenizer=None)` | Calculates or estimates the number of tokens in a text string.  |
-| `get_tokenizer()`              | Returns a Gemini tokenizer object if available.                 |
-
-
-## Technical Diagrams
-
-(Due to the text-based nature of this output, complex diagrams cannot be included. However, the structured information above should allow an AI assistant to reconstruct conceptual diagrams if needed.)
-
-
-## AI Technical Assistance Guidelines
-
-When working with this codebase:
-
-- Use exact variable names, routes, function signatures as listed in the technical reference.
-- Reference the precise technical details to avoid hallucinations.
-- Respect the existing architectural patterns when suggesting code modifications.
-
-This technical reference was automatically generated to help AI assistants understand the project's implementation details.
+Using this information will significantly reduce hallucinations and improve the accuracy of your suggestions and code completions.  Consult the "Technical Reference" section for quick lookup of specific elements.  Pay particular attention to the `FILE_SELECTION_MODE` in the `.env` file as it determines the core logic for selecting project files.  If `FILE_SELECTION_MODE` is set to `vector`, prioritize information from the `vector_db.py` file and relevant dependencies like `chromadb` and the embedding model in use (`VECTOR_MODEL`).
+```
