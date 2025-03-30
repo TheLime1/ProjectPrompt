@@ -3,8 +3,8 @@
 ## Roadmap:
 
 - [ ] inhance the files picking
-- [ ] make the prompt more technical (logic is a keyword)
+- [x] make the prompt more technical ("logic","little from everything")
 - [ ] make it a pip package
 - [ ] victor database
-- [ ] improve logging
-- [ ] better token calculation (logging too)
+- [x] improve logging
+- [x] better token calculation (logging too)

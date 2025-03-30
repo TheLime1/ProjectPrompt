@@ -34,12 +34,27 @@ class ProjectPromptGenerator:
         else:
             logger.info("DEBUG_AI_CALLS is disabled - set DEBUG_AI_CALLS=true in .env to see detailed AI communication")
             
+        # Check for custom file selection mode in environment
+        self.file_selection_mode = os.getenv("FILE_SELECTION_MODE", "ai").lower()
+        logger.info(f"File selection mode: {self.file_selection_mode}")
+
+        self.include_files = os.getenv("INCLUDE_FILES", "").split(",") if os.getenv("INCLUDE_FILES") else []
+        if self.include_files:
+            self.include_files = [f.strip() for f in self.include_files]
+            logger.info(f"Custom include files: {self.include_files}")
+            
+        self.exclude_files = os.getenv("EXCLUDE_FILES", "").split(",") if os.getenv("EXCLUDE_FILES") else []
+        if self.exclude_files:
+            self.exclude_files = [f.strip() for f in self.exclude_files]
+            logger.info(f"Custom exclude files: {self.exclude_files}")
+            
         self.root_dir = os.getcwd()
         logger.info(f"Working directory: {self.root_dir}")
         self.file_tree = []
         self.important_files = []
         self.ai_selected_files = []
         self.file_contents = {}
+        self.file_stats = {}  # Track stats like size, modified date, etc.
         self.readme_exists = False
         self.readme_content = ""
         self.project_summary = ""
@@ -330,8 +345,8 @@ services/authentication.py
         logger.info("Step 2: Analyzing project structure...")
         self.analyze_project_structure()
         
-        logger.info("Step 3: Getting AI input on important files...")
-        self.ask_ai_for_important_files()
+        logger.info("Step 3: Selecting important files...")
+        self.select_important_files()
         
         logger.info("Step 4: Loading file contents within token limits...")
         self.load_files_under_token_limit()
