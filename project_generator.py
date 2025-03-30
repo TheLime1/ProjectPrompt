@@ -451,71 +451,95 @@ services/authentication.py
         
         prompt = f"""
 You are an expert developer who is analyzing a project to create a specialized document ONLY FOR AI ASSISTANTS (not for human developers).
-Your task is to create an optimized PROJECT_PROMPT.md file that will prevent AI hallucinations and make AI tools focus precisely on the project scope.
+Your task is to create an optimized PROJECT_PROMPT.json file that will prevent AI hallucinations and make AI tools focus precisely on the project scope.
 
-Based on the following project information, create a detailed PROJECT_PROMPT.md that:
-1. Maps the core business logic and domain rules of the application in a highly structured format
-2. Creates clear logical flow diagrams showing how different components interact
-3. Identifies key decision points and business rules that govern application behavior
-4. Explains data models and their relationships in a way that minimizes AI confusion
-5. Prioritizes information that reveals the project's logical architecture over implementation details
+## TECHNICAL EXTRACTION REQUIREMENTS
+
+This document must be highly technical and focus on extracting critical details that developers and AI tools need repeatedly:
+
+1. EXTRACT SPECIFIC TECHNICAL ELEMENTS:
+   - All important variable names, constants, and their values/types
+   - Route names and URL patterns (e.g., in web frameworks like Symphony, Express, Flask)
+   - API endpoints with their HTTP methods and parameters
+   - Database table/collection names and their relationships
+   - Function signatures with parameter types and return values
+   - Configuration values and environment variables
+   - Class hierarchies and inheritance relationships
+   - Key component dependencies and their versions
+
+2. CREATE KEY-VALUE REFERENCE TABLES:
+   - Create organized, searchable tables of routes, variables, and constants
+   - Format these as structured JSON objects or markdown tables for quick lookup
+   - Include context about where each element is defined and used
+
+3. ORGANIZE BY TECHNICAL DOMAIN:
+   - Group related elements by technical categories (Routes, Models, Controllers, etc.)
+   - Create clear cross-references between related components
+   - Maintain consistent naming conventions for easy searching
+
+4. CREATE TECHNICAL DIAGRAMS:
+   - Flow diagrams showing request/response cycles
+   - Entity relationships and data flows
+   - Component interaction patterns
+   - Execution order of key operations
 
 Remember, the primary goal is to help AI tools:
-- Understand precisely what the application does (preventing hallucination)
-- Identify the scope and boundaries of the system (preventing unnecessary solutions)
-- Focus on the right components when suggesting changes (increasing efficiency)
-- Make code changes that align with existing business logic (maintaining consistency)
+- Use exact variable/route names instead of hallucinating them
+- Understand precise technical implementation details
+- Have reference tables they can consult for accuracy
+- Minimize guesswork when suggesting code modifications
 
 Here is the project information:
 {data_str}
 
-IMPORTANT GUIDELINES:
-1. Structure this document specifically for AI reasoning, not human reading
-2. Organize information hierarchically from high-level logic to implementation details
-3. Use precise, consistent terminology throughout the document
-4. Create clear boundaries around what's in-scope vs. out-of-scope
-5. Include a "Logic Map" section that visually represents key workflows using markdown formatting
+## OUTPUT FORMAT GUIDELINES
 
-The resulting document will serve as a reference for AI tools to understand the project scope precisely, 
-reducing token waste and improving the quality of AI completions by preventing hallucinations.
+1. Format your response as plain text optimized for AI parsing
+2. Create clear section headers with distinctive markers
+3. Use structured lists, tables, or JSON for technical reference data
+4. Organize information hierarchically from system-level to implementation details
+5. Include a "Technical Reference" section with exact names of key elements
+
+The resulting document will serve as a precise technical reference for AI tools to understand the project's implementation details,
+reducing token waste and improving the quality of AI completions by preventing hallucinations about variable names, routes, and other critical technical elements.
         """
         
         # Call Gemini API
-        logger.info("Calling Gemini API to generate AI-focused documentation")
+        logger.info("Calling Gemini API to generate AI-focused technical documentation")
         try:
             response = self.api_client.call_gemini_api(
                 prompt, 
                 self.tokenizer, 
                 operation_name="Project Prompt Generation",
                 source_file="project_generator.py",
-                prompt_summary="Generate PROJECT_PROMPT.md for AI assistants"
+                prompt_summary="Generate technical PROJECT_PROMPT for AI assistants"
             )
-            markdown_content = response.strip()
+            content = response.strip()
             
             # Add a clear header explaining the purpose of this file
-            ai_header = """# PROJECT_PROMPT - FOR AI ASSISTANTS ONLY
+            ai_header = """# PROJECT_PROMPT - TECHNICAL REFERENCE FOR AI ASSISTANTS
 
-> **IMPORTANT**: This document is specifically designed for AI assistants to understand this codebase efficiently. 
-> It is not intended for human developers. Developers should refer to README.md and other project documentation.
-> This document focuses on the core logic flows and business rules to prevent hallucinations and improve AI response quality.
+> **IMPORTANT**: This document is specifically designed as a technical reference for AI assistants.
+> It contains precise variable names, routes, endpoints, and other technical details to prevent hallucinations.
+> Human developers should refer to standard documentation.
 
 """
-            markdown_content = ai_header + markdown_content
+            content = ai_header + content
             
-            # Write to PROJECT_PROMPT.md
-            # Create a copy in the regular project directory
-            project_root_file = os.path.join(self.root_dir, "PROJECT_PROMPT.md")
+            # Write to PROJECT_PROMPT.json if it's JSON formatted, otherwise use .txt for plain text
+            file_extension = ".json" if content.strip().startswith("{") else ".md"
+            project_root_file = os.path.join(self.root_dir, f"PROJECT_PROMPT{file_extension}")
             with open(project_root_file, 'w', encoding='utf-8') as f:
-                f.write(markdown_content)
+                f.write(content)
                 
             # Also save a copy in the current log directory
-            log_file = os.path.join(run_log_dir, "PROJECT_PROMPT.md")
+            log_file = os.path.join(run_log_dir, f"PROJECT_PROMPT{file_extension}")
             with open(log_file, 'w', encoding='utf-8') as f:
-                f.write(markdown_content)
+                f.write(content)
             
-            logger.info(f"AI-focused PROJECT_PROMPT.md created successfully at {project_root_file}")
+            logger.info(f"AI-focused technical PROJECT_PROMPT{file_extension} created successfully at {project_root_file}")
             logger.info(f"Copy saved to log directory at {log_file}")
-            return markdown_content
+            return content
         except Exception as e:
             logger.error(f"Error generating AI documentation: {str(e)}")
             
@@ -523,27 +547,27 @@ reducing token waste and improving the quality of AI completions by preventing h
             self.create_fallback_project_prompt()
     
     def create_fallback_project_prompt(self):
-        """Create a basic PROJECT_PROMPT.md for AI assistants in case the API call fails"""
-        logger.warning("Creating fallback AI-focused PROJECT_PROMPT.md")
+        """Create a basic technical PROJECT_PROMPT for AI assistants in case the API call fails"""
+        logger.warning("Creating fallback technical AI-focused PROJECT_PROMPT.txt")
         
         project_name = os.path.basename(self.root_dir)
         file_count = len(self.file_tree)
         
-        content = f"""# PROJECT_PROMPT - FOR AI ASSISTANTS ONLY
+        content = f"""# PROJECT_PROMPT - TECHNICAL REFERENCE FOR AI ASSISTANTS
 
-> **IMPORTANT**: This document is specifically designed for AI assistants to understand this codebase efficiently. 
-> It is not intended for human developers. Developers should refer to README.md and other project documentation.
-> The structure and content of this file are optimized to improve AI reasoning and reduce token usage.
+> **IMPORTANT**: This document is specifically designed as a technical reference for AI assistants.
+> It contains precise variable names, routes, endpoints, and other technical details to prevent hallucinations.
+> Human developers should refer to standard documentation.
 
 ## Project Overview
-This is the AI-optimized documentation for {project_name}. The project contains {file_count} files.
+Technical reference for {project_name}. The project contains {file_count} files.
 
 ## File Structure Map
 ```
 {self.generate_file_tree_string()}
 ```
 
-## Important Files
+## Technical Reference: Important Files
 The following files are considered most important for understanding the project architecture:
 
 """
@@ -551,7 +575,19 @@ The following files are considered most important for understanding the project 
         for file in files_to_list:
             content += f"- `{file}`\n"
         
-        content += "\n## File Contents\n"
+        content += "\n## Technical Reference: Key Variables and Constants\n"
+        
+        # Extract some basic technical information from files
+        technical_details = self.extract_basic_technical_details()
+        for category, items in technical_details.items():
+            content += f"\n### {category}\n"
+            if items:
+                for item in items:
+                    content += f"- {item}\n"
+            else:
+                content += "No items identified in this category.\n"
+        
+        content += "\n## Technical Reference: File Contents\n"
         
         for file_path, file_content in self.file_contents.items():
             content += f"\n### `{file_path}`\n"
@@ -565,25 +601,91 @@ The following files are considered most important for understanding the project 
             content += "\n```\n"
         
         content += """
-## AI Assistance Guidelines
+## AI Technical Assistance Guidelines
 When working with this codebase:
-- Focus on the key files identified above
-- Reference the file structure to understand the organization
-- Use the file contents provided for context
+- Use exact variable names, routes and function signatures as listed in the technical reference
+- Reference the precise technical details to avoid hallucinations
+- Respect the existing architectural patterns when suggesting code modifications
 
-This documentation was automatically generated to help AI assistants better understand the project context quickly and efficiently while saving tokens.
+This technical reference was automatically generated to help AI assistants understand the project's implementation details.
 """
         
-        # Write to PROJECT_PROMPT.md
-        # Create a copy in the regular project directory
-        project_root_file = os.path.join(self.root_dir, "PROJECT_PROMPT.md")
+        # Write to PROJECT_PROMPT.txt (plaintext for fallback)
+        project_root_file = os.path.join(self.root_dir, "PROJECT_PROMPT.txt")
         with open(project_root_file, 'w', encoding='utf-8') as f:
             f.write(content)
             
         # Also save a copy in the current log directory
-        log_file = os.path.join(run_log_dir, "PROJECT_PROMPT.md")
+        log_file = os.path.join(run_log_dir, "PROJECT_PROMPT.txt")
         with open(log_file, 'w', encoding='utf-8') as f:
             f.write(content)
         
-        logger.info(f"Fallback AI-focused PROJECT_PROMPT.md created at {project_root_file}")
+        logger.info(f"Fallback technical AI-focused PROJECT_PROMPT.txt created at {project_root_file}")
         logger.info(f"Copy saved to log directory at {log_file}")
+    
+    def extract_basic_technical_details(self):
+        """Extract basic technical details from files for the fallback prompt"""
+        technical_details = {
+            "Functions": [],
+            "Routes": [],
+            "Constants": [],
+            "Classes": [],
+            "API Endpoints": [],
+            "Configuration Values": []
+        }
+        
+        # Simple regex patterns to identify common technical elements
+        import re
+        patterns = {
+            "Functions": r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)",
+            "Routes": r"@(?:app|router)\.(?:route|get|post|put|delete)\s*\(\s*['\"]([^'\"]+)['\"]",
+            "Constants": r"([A-Z][A-Z0-9_]*)\s*=\s*([^,;]+)",
+            "Classes": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            "API Endpoints": r"(?:api|endpoints|url)\s*\(\s*['\"]([^'\"]+)['\"]",
+        }
+        
+        for file_path, content in self.file_contents.items():
+            file_ext = os.path.splitext(file_path)[1].lower()
+            
+            # Extract elements based on file type
+            if file_ext in ['.py', '.js', '.ts', '.php', '.rb', '.java']:
+                # Extract functions
+                for match in re.finditer(patterns["Functions"], content):
+                    fn_name = match.group(1)
+                    params = match.group(2).strip()
+                    technical_details["Functions"].append(f"`{fn_name}({params})` in {file_path}")
+                
+                # Extract classes
+                for match in re.finditer(patterns["Classes"], content):
+                    class_name = match.group(1)
+                    technical_details["Classes"].append(f"`{class_name}` in {file_path}")
+                
+                # Extract constants
+                for match in re.finditer(patterns["Constants"], content):
+                    const_name = match.group(1)
+                    const_value = match.group(2).strip()
+                    if len(const_value) > 30:  # Truncate long values
+                        const_value = const_value[:30] + "..."
+                    technical_details["Constants"].append(f"`{const_name} = {const_value}` in {file_path}")
+            
+            # Extract routes
+            if file_ext in ['.py', '.js', '.ts', '.php', '.rb']:
+                for match in re.finditer(patterns["Routes"], content):
+                    route = match.group(1)
+                    technical_details["Routes"].append(f"`{route}` in {file_path}")
+                
+                for match in re.finditer(patterns["API Endpoints"], content):
+                    endpoint = match.group(1)
+                    technical_details["API Endpoints"].append(f"`{endpoint}` in {file_path}")
+            
+            # Extract config values from common config files
+            if 'config' in file_path.lower() or file_path.endswith(('.env', '.ini', '.cfg', '.conf')):
+                # Simple pattern to catch key = value pairs
+                for match in re.finditer(r"([a-zA-Z_][a-zA-Z0-9_]*)\s*[=:]\s*([^,;\n]+)", content):
+                    key = match.group(1)
+                    value = match.group(2).strip()
+                    if len(value) > 30:  # Truncate long values
+                        value = value[:30] + "..."
+                    technical_details["Configuration Values"].append(f"`{key} = {value}` in {file_path}")
+        
+        return technical_details

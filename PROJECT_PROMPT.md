@@ -1,99 +1,133 @@
-# PROJECT_PROMPT - FOR AI ASSISTANTS ONLY
+# PROJECT_PROMPT - TECHNICAL REFERENCE FOR AI ASSISTANTS
 
-> **IMPORTANT**: This document is specifically designed for AI assistants to understand this codebase efficiently. 
-> It is not intended for human developers. Developers should refer to README.md and other project documentation.
-> This document focuses on the core logic flows and business rules to prevent hallucinations and improve AI response quality.
+> **IMPORTANT**: This document is specifically designed as a technical reference for AI assistants.
+> It contains precise variable names, routes, endpoints, and other technical details to prevent hallucinations.
+> Human developers should refer to standard documentation.
 
-```markdown
-# PROJECT_PROMPT - FOR AI ASSISTANTS ONLY
+# PROJECT_PROMPT - TECHNICAL REFERENCE FOR AI ASSISTANTS
 
-> **IMPORTANT**: This document is specifically designed for AI assistants to understand this codebase efficiently. 
-> It is not intended for human developers. Developers should refer to README.md and other project documentation.
-> This document focuses on the core logic flows and business rules to prevent hallucinations and improve AI response quality.
+> **IMPORTANT**: This document is specifically designed as a technical reference for AI assistants.
+> It contains precise variable names, routes, endpoints, and other technical details to prevent hallucinations.
+> Human developers should refer to standard documentation.
 
-## Project Overview: ProjectPrompt
+## Project Overview
 
-This project aims to generate optimized prompts for AI assistants to analyze codebases effectively.  It focuses on extracting core business logic and architectural information to minimize AI hallucinations and improve the quality of AI-driven code modifications.  This system prioritizes logical understanding over specific implementation details.  The application interacts with the Google Gemini API.
+**Name:** ProjectPrompt
+**Purpose:** Generate optimized prompts for AI coding assistants based on project code.
+**Main Functionality:** Analyzes project structure, identifies important files with AI assistance or fallback methods, extracts technical details, and generates a PROJECT_PROMPT.md/json file for AI tools.
 
-## Logic Map
-
-```mermaid
-graph LR
-    A[ProjectPromptGenerator.run()] --> B{README.md exists?};
-    B -- Yes --> C[Read README.md];
-    B -- No --> D[Skip README.md];
-    C --> E[Analyze Project Structure];
-    D --> E;
-    E --> F[Ask AI for Important Files];
-    F --> G{AI Success?};
-    G -- Yes --> H[Load AI Selected Files];
-    G -- No --> I[Fallback: Identify Important Files];
-    H --> J[Load Files (Token Limit)];
-    I --> J;
-    J --> K[Generate PROJECT_PROMPT.md];
-    K --> L[Finalize Token Accounting];
-```
-
-## Core Business Logic and Domain Rules
-
-1. **File Selection:** The system prioritizes files containing core business logic, workflows, application logic, entry points, and data models. It avoids style files, static assets, tests (unless demonstrating business logic), configuration files, and external libraries.
-2. **Token Limit:** The system adheres to a strict token limit (`MAX_TOKENS = 1,800,000`) when loading file contents to send to the Gemini API.  A 5% buffer is maintained below this limit.
-3. **Gemini API Interaction:** The `GeminiAPI` class handles communication with the Gemini API, including authentication, request formatting, response parsing, and token usage tracking.  Retry logic is implemented to handle rate limiting (429 errors).
-4. **Fallback Mechanisms:** If the Gemini API call for file selection fails, a fallback mechanism identifies important files based on predefined patterns. A fallback `PROJECT_PROMPT.md` generation is also implemented if the main Gemini API call for documentation generation fails.
-5. **Token Accounting:**  Detailed token usage is logged for each API call and file loaded, including input and output token counts.  This facilitates monitoring and optimization of token consumption.
-6. **Error Handling:**  The system includes error handling for API requests, file reading, and other potential issues.  Error messages are logged for debugging purposes.
-7. **Ignoring Files:**  Files and directories matching specific patterns (defined in `ignored_patterns` and from `.gitignore`) are excluded from the analysis.
-
-
-## Data Models
-
-This project doesn't have explicit data models in the traditional sense.  The primary data structure used is a dictionary representing project information:
+## File Structure Map
 
 ```
-{
-    "name": "Project Name",
-    "file_count": <integer>,
-    "file_tree": <string>,
-    "file_contents": {
-        "file_path_1": "file_content_1",
-        "file_path_2": "file_content_2",
-        ...
-    },
-    "readme_content": <string> (optional)
-}
+Project File Structure:
+├── PROJECT_PROMPT.md
+├── README.md
+├── gemini_api.py
+├── project_generator.py
+├── project_prompt_generator.py
+├── token_utils.py
+└── test/
+    └── token_calc.py
+
 ```
 
-## Key Decision Points
+## Technical Reference: Key Components
 
-* **AI File Selection:** The AI is queried to identify important files.  This is a critical decision point that affects which files are included in the `PROJECT_PROMPT.md`.
-* **Token Limit Handling:** The system must decide which files to include based on the token limit. This involves calculating token usage for each file and prioritizing files based on their perceived importance.
-* **Fallback Logic:**  The system relies on fallback logic for important file selection and `PROJECT_PROMPT.md` generation if the Gemini API calls fail.  These decision points determine the system's robustness in the face of API issues.
+### 1. Project Generator (`project_generator.py`)
 
-## Scope and Boundaries
+**Class:** `ProjectPromptGenerator`
 
-**In-scope:**
+**Key Variables:**
 
-* Analyzing project structure and identifying important files.
-* Generating an AI-focused `PROJECT_PROMPT.md` document.
-* Interacting with the Google Gemini API.
-* Implementing fallback mechanisms for API and file handling failures.
-
-**Out-of-scope:**
-
-* Building or deploying the project.
-* Running tests or performing code analysis beyond file selection.
-* Implementing any specific functionality within the analyzed projects (this tool is for analysis only).
-* Supporting any LLM other than Google Gemini.
-
-
-## Implementation Details (For AI, Reduced Priority)
-
-The project is implemented in Python and uses several key libraries:
-
-* `vertexai`: For tokenization and interaction with the Gemini API (if available).
-* `requests`: For making HTTP requests to the Gemini API.
-* Other standard libraries: `os`, `sys`, `json`, `time`, `logging`, `pathlib`, `datetime`, `dotenv`, `re`.
+| Variable Name          | Type             | Description                                                            | Defined In                                          |
+|-----------------------|-----------------|--------------------------------------------------------------------|------------------------------------------------------|
+| `api_key`            | `str`           | Gemini API key.                                                        | `__init__`                                           |
+| `debug_ai_calls`    | `bool`          | Flag to enable detailed logging of AI interactions.                   | `__init__`                                           |
+| `root_dir`           | `str`           | Project root directory.                                                 | `__init__`                                           |
+| `file_tree`          | `list`          | List of file paths in the project.                                 | `analyze_project_structure`                         |
+| `important_files`    | `list`          | List of automatically identified important files (fallback).         | `identify_important_files_fallback`                  |
+| `ai_selected_files` | `list`          | List of files selected by the AI as important.                     | `ask_ai_for_important_files`                        |
+| `file_contents`      | `dict`          | Dictionary of file paths and their contents.                           | `load_files_under_token_limit`                      |
+| `readme_exists`      | `bool`          | Flag indicating if a README.md file exists.                         | `check_readme`                                      |
+| `readme_content`     | `str`           | Content of the README.md file.                                     | `check_readme`                                      |
+| `ignored_patterns`   | `list`          | List of regex patterns for files/directories to ignore.             | `__init__` and `add_gitignore_patterns`              |
+| `tokenizer`          | `Tokenizer`     | Tokenizer object for Gemini.                                         | `__init__`                                           |
+| `api_client`        | `GeminiAPI`     | Instance of the GeminiAPI client.                                  | `__init__`                                           |
 
 
-This simplified and structured PROJECT_PROMPT.md is designed to be highly parsable by AI, allowing efficient access to critical information without requiring extensive text processing. This minimized approach aims to improve the effectiveness of AI assistance within the specified scope and constraints. 
-```
+
+**Key Methods:**
+
+| Method Name                          | Description                                                                            |
+|------------------------------------|------------------------------------------------------------------------------------|
+| `__init__(self, api_key=None)`      | Constructor: Initializes the generator, loads API key, sets up logging and ignores. |
+| `add_gitignore_patterns(self)`      | Reads and adds ignore patterns from .gitignore.                                       |
+| `generate_file_tree_string(self)` | Creates a string representation of the file tree.                                 |
+| `ask_ai_for_important_files(self)` | Queries the AI to identify important files.                                       |
+| `load_files_under_token_limit(self)` | Loads file contents, respecting the token limit.                                    |
+| `run(self)`                         | Main execution method for the generator.                                             |
+| `check_readme(self)`               | Checks for README.md and loads its content.                                           |
+| `analyze_project_structure(self)`  | Analyzes project structure and builds the file tree.                             |
+| `read_file_content(self, file_path)` | Reads and returns the content of a given file.                                      |
+| `generate_project_prompt(self)`    | Generates the PROJECT_PROMPT.md/json file.                                   |
+|`create_fallback_project_prompt(self)`| Creates a basic PROJECT_PROMPT.txt if API fails.                                   |
+
+
+
+### 2. Gemini API Client (`gemini_api.py`)
+
+**Class:** `GeminiAPI`
+
+**Key Variables:**
+
+| Variable Name          | Type      | Description                                                                     |
+|-----------------------|-----------|------------------------------------------------------------------------------|
+| `api_key`            | `str`      | Gemini API key.                                                                |
+| `debug_ai_calls`    | `bool`     | Flag to enable saving full API requests and responses.                         |
+|`token_accounting_file`| `str`      | Path to the token usage log file.                                          |
+| `prompt_counter`      | `int`      | Counter for API prompts.                                                        |
+| `total_input_tokens` | `int`      | Total input tokens sent to the API.                                              |
+| `total_output_tokens`| `int`      | Total output tokens received from the API.                                      |
+
+
+**Key Methods:**
+
+| Method Name                              | Description                                                                          |
+|----------------------------------------|--------------------------------------------------------------------------------------|
+| `__init__(self, api_key, debug_ai_calls=False)` | Constructor: Initializes API client, sets up debug logging, creates accounting file.|
+| `log_token_accounting(...)`            | Records token usage for API calls and file processing.                               |
+|`finalize_token_accounting(self)`        | Adds a grand total row for tokens to accounting file.                                |
+| `call_gemini_api(...)`                  | Makes a call to the Gemini API. Handles retries and rate limiting.             |
+
+### 3. Token Utilities (`token_utils.py`)
+
+**Constants:**
+
+| Constant Name    | Value       | Description                                                     |
+|-----------------|-------------|-----------------------------------------------------------------|
+| `MAX_TOKENS`   | 1,800,000  | Maximum token limit for Gemini requests.                         |
+|`TOKENIZER_AVAILABLE`| `bool`     | Indicates whether vertexai tokenizer is available.           |
+
+
+**Functions:**
+
+| Function Name                  | Description                                                     |
+|-------------------------------|-----------------------------------------------------------------|
+| `calculate_tokens(text, tokenizer=None)` | Calculates or estimates the number of tokens in a text string.  |
+| `get_tokenizer()`              | Returns a Gemini tokenizer object if available.                 |
+
+
+## Technical Diagrams
+
+(Due to the text-based nature of this output, complex diagrams cannot be included. However, the structured information above should allow an AI assistant to reconstruct conceptual diagrams if needed.)
+
+
+## AI Technical Assistance Guidelines
+
+When working with this codebase:
+
+- Use exact variable names, routes, function signatures as listed in the technical reference.
+- Reference the precise technical details to avoid hallucinations.
+- Respect the existing architectural patterns when suggesting code modifications.
+
+This technical reference was automatically generated to help AI assistants understand the project's implementation details.
