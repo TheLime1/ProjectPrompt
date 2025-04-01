@@ -1,0 +1,15 @@
+# Core dependencies
+python-dotenv>=0.19.0
+requests>=2.28.0
+
+# Embedding models
+torch>=2.1.0
+sentence-transformers>=2.2.2
+chromadb>=0.4.18
+numpy>=1.20.0
+
+# Google AI API (optional but recommended)
+google-generativeai>=0.3.0
+
+# Optional: For accurate token counting
+vertexai>=0.1.1

@@ -35,7 +35,7 @@ class ProjectPromptGenerator:
             logger.info("DEBUG_AI_CALLS is disabled - set DEBUG_AI_CALLS=true in .env to see detailed AI communication")
             
         # Check for custom file selection mode in environment
-        self.file_selection_mode = os.getenv("FILE_SELECTION_MODE", "ai").lower()
+        self.file_selection_mode = os.getenv("FILE_SELECTION_MODE", "vector").lower()
         logger.info(f"File selection mode: {self.file_selection_mode}")
 
         self.include_files = os.getenv("INCLUDE_FILES", "").split(",") if os.getenv("INCLUDE_FILES") else []
@@ -78,6 +78,21 @@ class ProjectPromptGenerator:
         
         # Initialize API client
         self.api_client = GeminiAPI(self.api_key, self.debug_ai_calls)
+        
+        # Initialize vector database if available
+        try:
+            from vector_db import VectorDatabaseManager
+            self.vector_db = VectorDatabaseManager(self.root_dir, self.api_key)
+            if self.vector_db.is_initialized:
+                logger.info("Vector database initialized successfully")
+            else:
+                logger.warning("Vector database initialization failed, falling back to traditional methods")
+                self.file_selection_mode = "ai" if self.file_selection_mode == "vector" else self.file_selection_mode
+        except ImportError:
+            logger.warning("Vector database module not available. Install required packages to enable semantic search.")
+            logger.warning("Falling back to AI-based file selection")
+            self.vector_db = None
+            self.file_selection_mode = "ai" if self.file_selection_mode == "vector" else self.file_selection_mode
         
         # Add patterns from .gitignore if it exists
         self.add_gitignore_patterns()
@@ -434,6 +449,47 @@ services/authentication.py
         
         logger.info(f"Identified {len(self.important_files)} important files")
     
+    def select_important_files(self):
+        """Select important files based on chosen file selection mode"""
+        logger.info(f"Selecting important files using {self.file_selection_mode} method")
+        
+        if self.file_selection_mode == "vector" and hasattr(self, 'vector_db') and self.vector_db and self.vector_db.is_initialized:
+            # Use vector database for semantic file selection
+            logger.info("Using vector database for file selection")
+            try:
+                important_files = self.vector_db.get_important_files(self.file_tree)
+                if important_files:
+                    self.ai_selected_files = important_files
+                    logger.info(f"Vector DB identified {len(self.ai_selected_files)} important files")
+                    return
+                else:
+                    logger.warning("Vector database couldn't determine important files, falling back to AI selection")
+                    self.file_selection_mode = "ai"  # Fall back to AI selection
+            except Exception as e:
+                logger.error(f"Error using vector database for file selection: {str(e)}")
+                logger.warning("Falling back to AI selection due to vector DB error")
+                self.file_selection_mode = "ai"  # Fall back to AI selection
+        
+        if self.file_selection_mode == "ai":
+            # Use AI to select important files
+            self.ask_ai_for_important_files()
+        elif self.file_selection_mode == "manual":
+            # Use manually specified include files
+            if self.include_files:
+                self.ai_selected_files = []
+                for pattern in self.include_files:
+                    for file_path in self.file_tree:
+                        if re.search(pattern, file_path):
+                            self.ai_selected_files.append(file_path)
+                            logger.info(f"Manually included: {file_path}")
+                logger.info(f"Manually included {len(self.ai_selected_files)} files")
+            else:
+                logger.warning("Manual mode selected but no include patterns specified, falling back to automatic detection")
+                self.identify_important_files_fallback()
+        else:
+            # Default fallback - automatically identify important files
+            self.identify_important_files_fallback()
+    
     def read_file_content(self, file_path):
         """Read the entire content of a file"""
         full_path = os.path.join(self.root_dir, file_path)
@@ -509,9 +565,9 @@ Here is the project information:
 
 ## OUTPUT FORMAT GUIDELINES
 
-1. Format your response as plain text optimized for AI parsing
+1. Format your response as markdown text optimized for AI parsing
 2. Create clear section headers with distinctive markers
-3. Use structured lists, tables, or JSON for technical reference data
+3. Use structured lists, tables, or code blocks for technical reference data
 4. Organize information hierarchically from system-level to implementation details
 5. Include a "Technical Reference" section with exact names of key elements
 
@@ -541,18 +597,17 @@ reducing token waste and improving the quality of AI completions by preventing h
 """
             content = ai_header + content
             
-            # Write to PROJECT_PROMPT.json if it's JSON formatted, otherwise use .txt for plain text
-            file_extension = ".json" if content.strip().startswith("{") else ".md"
-            project_root_file = os.path.join(self.root_dir, f"PROJECT_PROMPT{file_extension}")
+            # Always use .md extension for Markdown format
+            project_root_file = os.path.join(self.root_dir, "PROJECT_PROMPT.md")
             with open(project_root_file, 'w', encoding='utf-8') as f:
                 f.write(content)
                 
             # Also save a copy in the current log directory
-            log_file = os.path.join(run_log_dir, f"PROJECT_PROMPT{file_extension}")
+            log_file = os.path.join(run_log_dir, "PROJECT_PROMPT.md")
             with open(log_file, 'w', encoding='utf-8') as f:
                 f.write(content)
             
-            logger.info(f"AI-focused technical PROJECT_PROMPT{file_extension} created successfully at {project_root_file}")
+            logger.info(f"AI-focused technical PROJECT_PROMPT.md created successfully at {project_root_file}")
             logger.info(f"Copy saved to log directory at {log_file}")
             return content
         except Exception as e:
