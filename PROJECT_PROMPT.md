@@ -11,139 +11,98 @@
 
 **Project Name:** ProjectPrompt
 **Description:** A tool to generate optimized prompts for AI assistants based on codebase analysis.
-**Purpose:** Improve AI understanding of project structure and functionality, minimizing hallucinations and maximizing token efficiency.
+**Purpose:** Enhance AI understanding of project structure and functionality for improved code generation and assistance.
 
 ## System Architecture
 
-**Core Components:**
+**Primary Components:**
 
-* **project_prompt_generator.py:** Main entry point, orchestrates the prompt generation process.
-* **gemini_api.py:** Handles interactions with the Google Gemini API, including token management and request retries.
-* **vector_db.py:** Manages the vector database for semantic file selection (ChromaDB).
-* **token_utils.py:** Provides token calculation functions using `vertexai` or estimations.
-* **project_generator.py:** (Not provided in source code, assumed core component). Likely handles file selection logic and prompt construction.
+1. **ProjectPromptGenerator:** Main entry point, orchestrates the prompt generation process.
+2. **GeminiAPI:** Handles communication with the Google Gemini API for AI-powered analysis and prompt generation.
+3. **VectorDatabaseManager:** Manages vector embeddings and similarity search for file selection.
+4. **TokenUtils:** Provides token calculation utilities.
 
 **Data Flow:**
 
-1. `project_prompt_generator.py` initiates the process.
-2. File selection occurs based on `FILE_SELECTION_MODE` (.env): `vector`, `ai`, or `auto`.
-    * `vector`: Utilizes `vector_db.py` and semantic search.
-    * `ai`: Calls Gemini API for analysis.
-    * `auto`: Uses heuristics.
-3. Selected files are passed to the prompt generator (`project_generator.py`).
-4. `project_generator.py` constructs the prompt.
-5. `gemini_api.py` sends the prompt to the Gemini API and receives the response.
-6. `token_utils.py` manages token counting throughout.
+1. **ProjectPromptGenerator** initializes **VectorDatabaseManager** to create file embeddings and **TokenUtils** for token counting.
+2. **ProjectPromptGenerator** analyzes project structure and selects relevant files using the chosen file selection mode (vector, ai, or auto).
+3. **ProjectPromptGenerator** generates an optimized prompt based on the selected files and their content using both local analysis and calls to the **GeminiAPI**.
+4. **GeminiAPI** interacts with the Google Gemini API, sending prompts and receiving generated content.
+5. **ProjectPromptGenerator** compiles the final `PROJECT_PROMPT.md` file.
+6. **TokenUtils** tracks token usage and provides estimates for prompt sizes.
+7. **Logger** records all operations and potential errors for debugging and analysis.
 
 ## Technical Reference
 
-### Environment Variables (.env)
+### File Selection Modes
 
-| Variable Name           | Description                                                                                      | Default Value     |
-|-------------------------|--------------------------------------------------------------------------------------------------|-----------------|
-| `GEMINI_API_KEY`        | API key for Google Gemini. **REQUIRED.**                                                        |                 |
-| `FILE_SELECTION_MODE` | File selection strategy: `vector`, `ai`, `auto`.                                               | `vector`         |
-| `INCLUDE_FILES`        | Comma-separated list of file paths to always include.                                            |                 |
-| `EXCLUDE_FILES`        | Comma-separated list of file paths to always exclude.                                            |                 |
-| `VECTOR_MODEL`         | Embedding model for vector-based selection (e.g., `all-MiniLM-L6-v2`).                           | `all-MiniLM-L6-v2` |
-| `MAX_VECTOR_FILES`     | Maximum number of files selected via vector search.                                             | `20`            |
-| `MIN_SIMILARITY`       | Minimum similarity threshold for vector search.                                               | `0.6`           |
-| `DEBUG_AI_CALLS`      | Set to `true` to save prompts and responses for debugging.                                      | `false`        |
-| `LOG_LEVEL`            | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`.                                          |                 |
+| Mode     | Description                                                          | Dependencies                                   |
+| -------- | -------------------------------------------------------------------- | --------------------------------------------- |
+| `vector` | Semantic search of file contents using vector embeddings.             | `sentence-transformers`, `chromadb`          |
+| `ai`     | AI-driven analysis of file tree structure (no content analysis).    | Google Gemini API                             |
+| `auto`   | Rule-based heuristics based on file types, names, and content patterns. | None                                          |
+
+### Configuration (.env)
+
+| Variable                | Description                                                                  | Default Value                     |
+| ----------------------- | ---------------------------------------------------------------------------- | --------------------------------- |
+| `GEMINI_API_KEY`       | API key for Google Gemini.                                                  | (Required)                        |
+| `FILE_SELECTION_MODE` | File selection mode.                                                           | `vector`                          |
+| `INCLUDE_FILES`        | Comma-separated list of file patterns to always include.                      | (Empty)                           |
+| `EXCLUDE_FILES`        | Comma-separated list of file patterns to always exclude.                      | (Empty)                           |
+| `VECTOR_MODEL`         | Embedding model name for vector-based selection.                              | `all-MiniLM-L6-v2`                |
+| `MAX_VECTOR_FILES`    | Maximum number of files to select with vector mode.                           | `20`                              |
+| `MIN_SIMILARITY`       | Minimum similarity threshold for vector-based selection (0.0-1.0).              | `0.6`                             |
+| `DEBUG_AI_CALLS`       | Enable debugging of AI API calls (saves prompts and responses).               | `false`                           |
+| `LOG_LEVEL`            | Logging verbosity level (`DEBUG`, `INFO`, `WARNING`, `ERROR`).              | `INFO`                            |
+
 
 
 ### Constants (token_utils.py)
 
-| Constant Name | Value      | Description                                        |
-|---------------|-------------|----------------------------------------------------|
-| `MAX_TOKENS`  | `1800000` | Maximum token limit for Gemini 1.5 Pro API calls. |
+| Constant     | Value       | Description                                        |
+|--------------|-------------|----------------------------------------------------|
+| `MAX_TOKENS` | `1800000` | Maximum token limit for Gemini 1.5 Pro.           |
 
-
-### Functions (gemini_api.py)
-
-```python
-GeminiAPI.call_gemini_api(prompt, tokenizer=None, operation_name="API Call", source_file="", prompt_summary="") 
-# Returns: str (API response text)
-# Parameters:
-#   prompt (str): The prompt to send to the API.
-#   tokenizer: (Optional) Tokenizer object.
-#   operation_name (str): Name of the operation for logging.
-#   source_file (str): Path to the source file for logging.
-#   prompt_summary (str): Summary of the prompt for logging.
-
-GeminiAPI.log_token_accounting(input_tokens, output_tokens, prompt_summary="", operation_name="", source_file="")
-# Returns: int (total tokens)
-# Parameters:
-#  input_tokens (int)
-#  output_tokens (int)
-#  prompt_summary (str)
-#  operation_name (str)
-#  source_file (str)
-
-GeminiAPI.finalize_token_accounting()
-# Returns: None
-
-# ... other GeminiAPI functions ...
-```
 
 ### Functions (token_utils.py)
 
-```python
-calculate_tokens(text, tokenizer=None)
-# Returns: int (estimated or calculated token count)
-# Parameters:
-#   text (str)
-#   tokenizer (Optional)
-
-
-get_tokenizer() 
-# Returns: tokenizer object or None
+```
+calculate_tokens(text, tokenizer=None) -> int
+get_tokenizer() -> Tokenizer
 ```
 
 
-### Functions (vector_db.py)
+### Classes (vector_db.py)
 
-```python
-#... VectorDatabaseManager methods: add_files, query_similar_files, get_related_files.  Refer to source for parameters/returns.
+```
+VectorDatabaseManager(root_dir: str, api_key: Optional[str] = None, model_name: str = DEFAULT_MODEL)
+    add_files(file_paths: List[str], file_contents: Dict[str, str]) -> bool
+    query_similar_files(query: str, n_results: int = 10) -> List[Dict]
+    get_related_files(file_path: str, n_results: int = 5) -> List[Dict]
+```
+
+### Classes (gemini_api.py)
+
+```
+GeminiAPI(api_key, debug_ai_calls=False)
+    call_gemini_api(prompt, tokenizer=None, operation_name="API Call", source_file="", prompt_summary="") -> str
+    log_token_accounting(input_tokens, output_tokens, prompt_summary="", operation_name="", source_file="") -> int
+    finalize_token_accounting()
 ```
 
 
-### Classes
 
-* `GeminiAPI` (gemini_api.py)
-* `VectorDatabaseManager` (vector_db.py)
+## Dependencies
 
-### Dependencies
-
-* `google.generativeai` (Gemini API)
-* `vertexai` (Tokenization)
-* `sentence-transformers` (Embeddings - optional)
-* `chromadb` (Vector database - optional)
-* `requests` (HTTP requests)
+- `requests`
+- `sentence-transformers` (optional, for vector-based selection)
+- `chromadb` (optional, for vector-based selection)
+- `vertexai` (for tokenization, though fallback exists)
+- `google.generativeai` (for fallback embedding)
 
 
-## File Relationships
+## Conclusion
 
-* `project_prompt_generator.py` uses `gemini_api.py`, `vector_db.py`, `project_generator.py` (assumed).
-* `gemini_api.py` uses `token_utils.py`.
-* `vector_db.py` can use `sentence-transformers`, `chromadb`, and `google.generativeai`.
-
-## Data Structures
-
-* Vector database (ChromaDB) stores file embeddings and metadata.
-* `.env` file stores configuration parameters.
-
-
-## AI Assistant Instructions
-
-This document provides a comprehensive technical overview of the ProjectPrompt project. When working with this codebase, please refer to this document for precise information about:
-
-* Variable names and constants
-* Function signatures and parameters
-* Class hierarchies and relationships
-* API endpoints and parameters
-* File paths and relationships
-* Configuration options
-
-Using this information will significantly reduce hallucinations and improve the accuracy of your suggestions and code completions.  Consult the "Technical Reference" section for quick lookup of specific elements.  Pay particular attention to the `FILE_SELECTION_MODE` in the `.env` file as it determines the core logic for selecting project files.  If `FILE_SELECTION_MODE` is set to `vector`, prioritize information from the `vector_db.py` file and relevant dependencies like `chromadb` and the embedding model in use (`VECTOR_MODEL`).
+This PROJECT_PROMPT.json provides a structured and technically precise overview of the ProjectPrompt project for AI assistants. This format aims to minimize hallucinations and improve the accuracy of AI-generated code and suggestions by providing readily accessible information about key components, configuration options, and implementation details.
 ```
