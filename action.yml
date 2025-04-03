@@ -2,7 +2,7 @@ name: 'ProjectPrompt'
 description: 'Analyze your codebase and create specialized prompts for AI assistants'
 author: 'Aymen Hmani @TheLime1'
 branding:
-  icon: 'code'
+  icon: 'file-text'
   color: 'yellow'
 
 inputs:
