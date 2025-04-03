@@ -44,7 +44,7 @@ runs:
 
     - name: Create .env file
       run: |
-        echo "GEMINI_API_KEY=${{ inputs.gemini_api_key }}" > .env
+        echo "GEMINI_API_KEY=${{ secrets.gemini_api_key }}" > .env
         echo "FILE_SELECTION_MODE=${{ inputs.file_selection_mode }}" >> .env
         echo "INCLUDE_FILES=${{ inputs.include_files }}" >> .env
         echo "EXCLUDE_FILES=${{ inputs.exclude_files }}" >> .env
