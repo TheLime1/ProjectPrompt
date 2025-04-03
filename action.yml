@@ -3,7 +3,7 @@ description: 'Analyze your codebase and create specialized prompts for AI assist
 author: 'Aymen Hmani'
 branding:
   icon: 'code'
-  color: 'gold'
+  color: 'yellow'
 
 inputs:
   file_selection_mode:
