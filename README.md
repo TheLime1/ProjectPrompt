@@ -17,7 +17,7 @@ ProjectPrompt is a tool that analyzes your codebase and creates specialized prom
 - [x] Vector database for semantic file selection
 - [x] Improve logging
 - [x] Better token calculation (logging too)
-- [ ] Make it a pip package
+- [ ] Make it a pip package?
 
 ## Installation
 

@@ -1,0 +1,56 @@
+name: 'ProjectPrompt'
+description: 'Analyze your codebase and create specialized prompts for AI assistants'
+author: 'Aymen Hmani'
+branding:
+  icon: 'code'
+  color: 'blue'
+
+inputs:
+  file_selection_mode:
+    description: 'File selection mode (vector, ai, auto)'
+    default: 'vector'
+    required: false
+  include_files:
+    description: 'Files to include (comma-separated)'
+    default: ''
+    required: false
+  exclude_files:
+    description: 'Files to exclude (comma-separated)'
+    default: ''
+    required: false
+  debug_ai_calls:
+    description: 'Debug AI calls'
+    default: 'false'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r ${{ github.action_path }}/requirements.txt
+      shell: bash
+
+    - name: Create .env file
+      run: |
+        echo "GEMINI_API_KEY=${{ inputs.gemini_api_key }}" > .env
+        echo "FILE_SELECTION_MODE=${{ inputs.file_selection_mode }}" >> .env
+        echo "INCLUDE_FILES=${{ inputs.include_files }}" >> .env
+        echo "EXCLUDE_FILES=${{ inputs.exclude_files }}" >> .env
+        echo "DEBUG_AI_CALLS=${{ inputs.debug_ai_calls }}" >> .env
+      shell: bash
+
+    - name: Run ProjectPrompt
+      run: python ${{ github.action_path }}/project_prompt_generator.py
+      shell: bash

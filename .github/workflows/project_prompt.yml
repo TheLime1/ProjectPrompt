@@ -1,0 +1,65 @@
+name: Generate ProjectPrompt
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_selection_mode:
+        description: 'File selection mode (vector, ai, auto)'
+        default: 'vector'
+        required: false
+      include_files:
+        description: 'Files to include (comma-separated)'
+        default: ''
+        required: false
+      exclude_files:
+        description: 'Files to exclude (comma-separated)'
+        default: ''
+        required: false
+      debug_ai_calls:
+        description: 'Debug AI calls'
+        type: boolean
+        default: false
+        required: false
+
+jobs:
+  generate_prompt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
+          echo "FILE_SELECTION_MODE=${{ inputs.file_selection_mode || 'vector' }}" >> .env
+          echo "INCLUDE_FILES=${{ inputs.include_files }}" >> .env
+          echo "EXCLUDE_FILES=${{ inputs.exclude_files }}" >> .env
+          echo "DEBUG_AI_CALLS=${{ inputs.debug_ai_calls == true && 'true' || 'false' }}" >> .env
+
+      - name: Run ProjectPrompt
+        run: python project_prompt_generator.py
+
+      - name: Upload PROJECT_PROMPT.md
+        uses: actions/upload-artifact@v3
+        with:
+          name: PROJECT_PROMPT
+          path: PROJECT_PROMPT.md
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: logs
+          path: log/
